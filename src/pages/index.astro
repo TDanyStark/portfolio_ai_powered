@@ -5,349 +5,304 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Daniel Amado - Hero</title>
     <style>
-        /* === ESTILOS GLOBALES === */
-        body, html {
+        :root {
+            --sky-top: #78b9f6;
+            --sky-mid: #b9dcff;
+            --sky-bottom: #e8f4ff;
+        }
+
+        html, body {
             margin: 0;
-            padding: 0;
             width: 100%;
             height: 100%;
             overflow: hidden;
-            background-color: #030303; /* Cielo nocturno profundo */
-            font-family: 'Inter', -apple-system, sans-serif;
+            font-family: "Sora", "Segoe UI", sans-serif;
+            background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 50%, var(--sky-bottom) 100%);
         }
 
-        /* === CAPA 1: VIDEO OVERLAY === */
-        #intro-video-container {
-            position: absolute;
-            top: 0;
-            left: 0;
+        .hero {
+            position: relative;
             width: 100%;
-            height: 100%;
-            background-color: #000000;
-            z-index: 30;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #sky-bg {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            background-image:
+                radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.70), transparent 30%),
+                radial-gradient(circle at 78% 26%, rgba(255, 255, 255, 0.55), transparent 28%),
+                radial-gradient(circle at 60% 72%, rgba(255, 255, 255, 0.45), transparent 36%),
+                linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 48%, var(--sky-bottom) 100%);
+            background-size: 130% 130%;
+            animation: driftSky 24s ease-in-out infinite alternate;
+        }
+
+        #sky-bg::after {
+            content: "";
+            position: absolute;
+            inset: -8%;
+            background: url('/cloud1.png') center/40% repeat;
+            opacity: 0.2;
+            mix-blend-mode: screen;
+            filter: saturate(0.9) contrast(1.02);
             pointer-events: none;
         }
 
-        #intro-video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover; /* Asegura que el video cubra toda la pantalla sin deformarse */
-        }
-
-        /* === CAPA 2: THREE.JS CANVAS === */
         #webgl-canvas {
             position: absolute;
-            top: 0;
-            left: 0;
+            inset: 0;
             width: 100%;
             height: 100%;
-            z-index: 10;
+            z-index: 1;
         }
 
-        /* === CAPA 3: INTERFAZ DE USUARIO === */
         #hero-ui {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 20;
+            inset: 0;
+            z-index: 2;
             display: flex;
             flex-direction: column;
-            justify-content: center;
             align-items: center;
-            pointer-events: none; /* Crucial: Deja pasar el mouse hacia el canvas 3D */
-            opacity: 0; /* Oculto inicialmente, GSAP lo revelará */
+            justify-content: center;
+            pointer-events: none;
         }
 
         .hero-title {
-            font-size: 8vw;
-            font-weight: 900;
-            color: rgba(255, 255, 255, 0.9);
             margin: 0;
+            font-size: clamp(2rem, 6vw, 5.75rem);
             letter-spacing: -0.03em;
-            line-height: 1;
-            text-shadow: 0 0 40px rgba(0, 240, 255, 0.2);
+            color: rgba(22, 37, 56, 0.88);
+            text-shadow: 0 10px 28px rgba(255, 255, 255, 0.55);
         }
 
         .hero-subtitle {
-            font-size: 2vw;
-            font-family: monospace;
-            color: #00F0FF;
-            margin-top: 10px;
-            letter-spacing: 0.2em;
+            margin: 0.65rem 0 0;
+            font-size: clamp(0.8rem, 1.6vw, 1.3rem);
+            letter-spacing: 0.28em;
             text-transform: uppercase;
+            color: rgba(27, 52, 81, 0.86);
+        }
+
+        @keyframes driftSky {
+            from {
+                transform: scale(1) translate3d(0, 0, 0);
+            }
+
+            to {
+                transform: scale(1.08) translate3d(-2.5%, 1.2%, 0);
+            }
         }
     </style>
 </head>
 <body>
+    <section class="hero">
+        <div id="sky-bg"></div>
+        <canvas id="webgl-canvas"></canvas>
 
-    <!-- Capa de Video Real -->
-    <div class="video-overlay" id="intro-video-container">
-        <video id="intro-video" muted playsinline>
-            <source src="video.mp4" type="video/mp4" />
-        </video>
-    </div>
+        <div id="hero-ui">
+            <h1 class="hero-title">DANIEL AMADO</h1>
+            <h2 class="hero-subtitle">FULLSTACK AI-POWERED</h2>
+        </div>
+    </section>
 
-    <!-- El lienzo de las Nubes / Logos -->
-    <canvas id="webgl-canvas"></canvas>
-
-    <!-- Tu Título -->
-    <div id="hero-ui">
-        <h1 class="hero-title">DANIEL AMADO</h1>
-        <h2 class="hero-subtitle">FULLSTACK AI-POWERED</h2>
-    </div>
-
-    <!-- Importamos Three.js y GSAP desde CDNs (En Astro usarías npm install) -->
     <script type="module">
-        import * as THREE from 'https://cdn.skypack.dev/three@0.136.0';
-        import gsap from 'https://cdn.skypack.dev/gsap@3.10.4';
+        import * as THREE from 'three';
+        import { gsap } from 'gsap';
 
-        // ==========================================
-        // 1. CONFIGURACIÓN BÁSICA DE THREE.JS
-        // ==========================================
         const canvas = document.getElementById('webgl-canvas');
+        const isMobile = window.innerWidth < 768;
+        const pairLabels = [
+            ['HTML', 'JS'],
+            ['REACT', 'PYTHON'],
+            ['NODE', 'NEXT']
+        ];
+
         const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.z = 120;
+        camera.position.z = isMobile ? 140 : 115;
 
-        // ==========================================
-        // 2. TEXTURAS DE NUBES
-        // ==========================================
-        const textureLoader = new THREE.TextureLoader();
-        // Usamos una textura de humo pública muy popular en Three.js para darle el efecto de nube real
-        // Puedes cambiar esta URL por el asset generado con IA
-        const cloudTexture = textureLoader.load('cloud1.png');
+        const cloudTexture = new THREE.TextureLoader().load('/cloud1.png');
 
-        // ==========================================
-        // 3. GENERACIÓN DE DATOS (MOLDE DE LOS LOGOS)
-        // ==========================================
-        function getLogoCoordinates() {
-            const tempCanvas = document.createElement('canvas');
-            const ctx = tempCanvas.getContext('2d');
-            tempCanvas.width = 1024;
-            tempCanvas.height = 512;
+        const material = new THREE.ShaderMaterial({
+            uniforms: {
+                uTime: { value: 0 },
+                uProgress: { value: 1 },
+                uCloudTexture: { value: cloudTexture },
+                uColorBase: { value: new THREE.Color('#ffffff') }
+            },
+            vertexShader: `
+                uniform float uTime;
+                uniform float uProgress;
 
-            ctx.fillStyle = 'black';
-            ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-            ctx.fillStyle = 'white';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            
-            ctx.font = 'bold 60px Arial';
-            ctx.fillText('HTML', 200, 150);
-            ctx.font = 'bold 70px Arial';
-            ctx.fillText('JS', 800, 150);
-            ctx.font = '80px Arial';
-            ctx.fillText('⚛', 512, 400); 
-            ctx.font = 'bold 60px Arial';
-            ctx.fillText('PY', 200, 400); 
-            ctx.font = 'bold 50px Arial';
-            ctx.fillText('NEXT', 800, 400);
+                attribute vec3 aTarget;
+                attribute float aSize;
 
-            const imgData = ctx.getImageData(0, 0, tempCanvas.width, tempCanvas.height).data;
-            const validCoordinates = [];
+                varying float vAlpha;
 
-            // Aumentamos el muestreo (+3 en lugar de +2) para no tener excesivas partículas
-            // ya que ahora usan texturas densas de humo
-            for (let y = 0; y < tempCanvas.height; y += 3) { 
-                for (let x = 0; x < tempCanvas.width; x += 3) {
-                    const index = (y * tempCanvas.width + x) * 4;
-                    const r = imgData[index];
-                    if (r > 128) {
-                        const posX = (x / tempCanvas.width - 0.5) * 160;
-                        const posY = -(y / tempCanvas.height - 0.5) * 80;
-                        validCoordinates.push(new THREE.Vector3(posX, posY, 0));
-                    }
+                vec3 noise3D(vec3 p) {
+                    return vec3(
+                        sin(p.y * 9.0 + uTime * 0.65) * cos(p.z * 4.5 + uTime),
+                        sin(p.z * 8.0 + uTime * 0.75) * cos(p.x * 4.0 + uTime),
+                        sin(p.x * 9.0 + uTime * 0.7) * cos(p.y * 3.5 + uTime)
+                    );
                 }
-            }
-            return validCoordinates;
-        }
 
-        const targetCoords = getLogoCoordinates();
-        // Menos partículas pero más grandes porque ahora son texturas de nubes densas
-        const numParticles = 12000; 
+                void main() {
+                    vec3 chaos = position + noise3D(position * 0.04) * 4.0;
+                    vec3 formed = aTarget + noise3D(aTarget * 0.025) * 0.65;
+                    vec3 finalPos = mix(chaos, formed, uProgress);
 
+                    vec4 mvPosition = modelViewMatrix * vec4(finalPos, 1.0);
+                    gl_PointSize = aSize * (285.0 / -mvPosition.z);
+                    gl_Position = projectionMatrix * mvPosition;
+
+                    vAlpha = mix(0.22, 0.56, uProgress);
+                }
+            `,
+            fragmentShader: `
+                uniform sampler2D uCloudTexture;
+                uniform vec3 uColorBase;
+                varying float vAlpha;
+
+                void main() {
+                    vec4 smoke = texture2D(uCloudTexture, gl_PointCoord);
+                    float alpha = smoke.r * vAlpha;
+                    gl_FragColor = vec4(uColorBase, alpha);
+                }
+            `,
+            transparent: true,
+            depthWrite: false,
+            blending: THREE.NormalBlending
+        });
+
+        const numParticles = isMobile ? 7500 : 12500;
         const geometry = new THREE.BufferGeometry();
         const positions = new Float32Array(numParticles * 3);
         const targets = new Float32Array(numParticles * 3);
         const sizes = new Float32Array(numParticles);
 
-        for (let i = 0; i < numParticles; i++) {
-            positions[i * 3] = (Math.random() - 0.5) * 400;     
-            positions[i * 3 + 1] = (Math.random() - 0.5) * 300; 
-            positions[i * 3 + 2] = (Math.random() - 0.5) * 200; 
-
-            const target = targetCoords[Math.floor(Math.random() * targetCoords.length)];
-            targets[i * 3] = target.x;
-            targets[i * 3 + 1] = target.y;
-            targets[i * 3 + 2] = (Math.random() - 0.5) * 8; 
-
-            // Partículas mucho más grandes para parecer nubes (10 a 30 de tamaño relativo)
-            sizes[i] = Math.random() * 20.0 + 10.0;
+        for (let i = 0; i < numParticles; i += 1) {
+            positions[i * 3] = (Math.random() - 0.5) * 380;
+            positions[i * 3 + 1] = (Math.random() - 0.5) * 250;
+            positions[i * 3 + 2] = (Math.random() - 0.5) * 120;
+            sizes[i] = isMobile ? Math.random() * 10 + 9 : Math.random() * 12 + 11;
         }
 
         geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
         geometry.setAttribute('aTarget', new THREE.BufferAttribute(targets, 3));
         geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
 
-        // ==========================================
-        // 4. SHADERS MAGIC (GLSL)
-        // ==========================================
-        const material = new THREE.ShaderMaterial({
-            uniforms: {
-                uTime: { value: 0 },
-                uProgress: { value: 0 }, 
-                uMouse: { value: new THREE.Vector3(-999, -999, 0) }, 
-                uColorBase: { value: new THREE.Color('#00F0FF') },
-                uCloudTexture: { value: cloudTexture } // Pasamos la textura al Shader
-            },
-            vertexShader: `
-                uniform float uTime;
-                uniform float uProgress;
-                uniform vec3 uMouse;
-                
-                attribute vec3 aTarget;
-                attribute float aSize;
-                
-                varying float vAlpha;
+        const particles = new THREE.Points(geometry, material);
+        scene.add(particles);
 
-                vec3 noise3D(vec3 p) {
-                    return vec3(
-                        sin(p.y * 10.0 + uTime) * cos(p.z * 5.0 + uTime),
-                        sin(p.z * 10.0 + uTime) * cos(p.x * 5.0 + uTime),
-                        sin(p.x * 10.0 + uTime) * cos(p.y * 5.0 + uTime)
-                    );
-                }
+        function buildPairTargets(leftLabel, rightLabel) {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = 1400;
+            tempCanvas.height = 720;
+            const ctx = tempCanvas.getContext('2d');
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+            ctx.fillStyle = 'white';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
 
-                void main() {
-                    vec3 finalPos = mix(position, aTarget, uProgress);
+            const leftFont = isMobile ? '900 122px Arial Black' : '900 186px Arial Black';
+            const rightFont = isMobile ? '900 112px Arial Black' : '900 172px Arial Black';
+            const baselineY = isMobile ? 360 : 370;
 
-                    float distToMouse = distance(finalPos.xy, uMouse.xy);
-                    float interactionRadius = 25.0; 
-                    
-                    if (distToMouse < interactionRadius && uProgress > 0.5) {
-                        float force = (interactionRadius - distToMouse) / interactionRadius;
-                        vec3 turbulence = noise3D(finalPos * 0.1) * force * 15.0;
-                        vec3 push = normalize(finalPos - vec3(uMouse.xy, 0.0)) * force * 10.0;
-                        finalPos += turbulence + push;
+            ctx.font = leftFont;
+            ctx.fillText(leftLabel, tempCanvas.width * 0.29, baselineY);
+            ctx.font = rightFont;
+            ctx.fillText(rightLabel, tempCanvas.width * 0.71, baselineY);
+
+            const data = ctx.getImageData(0, 0, tempCanvas.width, tempCanvas.height).data;
+            const points = [];
+            const step = isMobile ? 3 : 2;
+
+            for (let y = 0; y < tempCanvas.height; y += step) {
+                for (let x = 0; x < tempCanvas.width; x += step) {
+                    const index = (y * tempCanvas.width + x) * 4;
+                    if (data[index] > 128) {
+                        points.push({
+                            x: (x / tempCanvas.width - 0.5) * (isMobile ? 185 : 228),
+                            y: -(y / tempCanvas.height - 0.5) * (isMobile ? 108 : 122),
+                            z: (Math.random() - 0.5) * 6
+                        });
                     }
-
-                    finalPos.y += sin(uTime * 1.5 + aTarget.x * 0.1) * 0.8 * uProgress;
-
-                    vec4 mvPosition = modelViewMatrix * vec4(finalPos, 1.0);
-                    
-                    // Incrementamos drásticamente el multiplicador de tamaño para las texturas
-                    gl_PointSize = aSize * (300.0 / -mvPosition.z);
-                    gl_Position = projectionMatrix * mvPosition;
-
-                    vAlpha = mix(0.1, 0.4, uProgress); // Nubes suaves y semitransparentes
                 }
-            `,
-            fragmentShader: `
-                uniform vec3 uColorBase;
-                uniform sampler2D uCloudTexture;
-                varying float vAlpha;
+            }
 
-                void main() {
-                    // Mapeamos la textura de nube sobre la partícula
-                    vec4 texColor = texture2D(uCloudTexture, gl_PointCoord);
-                    
-                    // Mezclamos el color base (Azul) con la textura y la opacidad global
-                    // El ".r" funciona bien para texturas de humo en escala de grises
-                    gl_FragColor = vec4(uColorBase * texColor.rgb, vAlpha * texColor.r);
-                }
-            `,
-            transparent: true,
-            depthWrite: false,
-            blending: THREE.AdditiveBlending // Para que las nubes se mezclen luminosamente
-        });
-
-        const particleSystem = new THREE.Points(geometry, material);
-        scene.add(particleSystem);
-
-        // ==========================================
-        // 5. INTERACCIÓN DEL MOUSE
-        // ==========================================
-        const raycaster = new THREE.Raycaster();
-        const mouse = new THREE.Vector2();
-        const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0); 
-        const targetPoint = new THREE.Vector3();
-
-        window.addEventListener('mousemove', (event) => {
-            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-            raycaster.setFromCamera(mouse, camera);
-            raycaster.ray.intersectPlane(plane, targetPoint);
-            material.uniforms.uMouse.value.copy(targetPoint);
-        });
-
-        // ==========================================
-        // 6. ANIMACIÓN Y VIDEO LOGIC
-        // ==========================================
-        const video = document.getElementById('intro-video');
-        const videoContainer = document.getElementById('intro-video-container');
-        let transitionStarted = false;
-
-        function startMagic() {
-            if(transitionStarted) return;
-            transitionStarted = true;
-
-            const tl = gsap.timeline();
-            tl.to(videoContainer, {
-                opacity: 0,
-                duration: 2,
-                ease: "power2.inOut"
-            });
-            tl.to("#hero-ui", {
-                opacity: 1,
-                duration: 2,
-                ease: "power2.out"
-            }, "-=1.0");
-            tl.to(material.uniforms.uProgress, {
-                value: 1,
-                duration: 5,
-                ease: "power3.inOut"
-            }, "-=1.5");
+            return points;
         }
 
-        // Intentar reproducir automáticamente
-        video.play().catch(e => console.warn("Autoplay prevenido por el navegador. Se necesita interacción.", e));
-
-        // Escuchar el progreso del video (Ej: iniciar 2 segundos antes de que termine)
-        video.addEventListener('timeupdate', () => {
-            if (video.duration > 0 && video.currentTime >= video.duration - 2) {
-                startMagic();
+        function assignTargets(left, right) {
+            const coords = buildPairTargets(left, right);
+            const targetAttr = geometry.getAttribute('aTarget');
+            for (let i = 0; i < numParticles; i += 1) {
+                const point = coords[Math.floor(Math.random() * coords.length)];
+                targetAttr.array[i * 3] = point.x;
+                targetAttr.array[i * 3 + 1] = point.y;
+                targetAttr.array[i * 3 + 2] = point.z;
             }
-        });
+            targetAttr.needsUpdate = true;
+        }
 
-        // Plan de Respaldo: Si el video no carga o da error, iniciamos a los 3 segundos.
-        setTimeout(() => {
-            if(!transitionStarted) startMagic();
-        }, 3000);
+        let activePair = 0;
+        assignTargets(pairLabels[activePair][0], pairLabels[activePair][1]);
 
-        // ==========================================
-        // 7. RENDER LOOP Y RESIZE
-        // ==========================================
+        const morph = gsap.timeline({ repeat: -1, repeatDelay: 0.28 });
+        morph
+            .to(material.uniforms.uProgress, {
+                value: 1,
+                duration: 1.1,
+                ease: 'power2.out'
+            })
+            .to({}, { duration: 1.3 })
+            .to(material.uniforms.uProgress, {
+                value: 0,
+                duration: 2.05,
+                ease: 'power3.inOut',
+                onComplete: () => {
+                    activePair = (activePair + 1) % pairLabels.length;
+                    assignTargets(pairLabels[activePair][0], pairLabels[activePair][1]);
+                }
+            })
+            .to(material.uniforms.uProgress, {
+                value: 1,
+                duration: 2.35,
+                ease: 'power3.out'
+            })
+            .to({}, { duration: 1.45 });
+
         const clock = new THREE.Clock();
         function animate() {
             requestAnimationFrame(animate);
-            material.uniforms.uTime.value = clock.getElapsedTime();
-            camera.position.x += (mouse.x * 10 - camera.position.x) * 0.05;
-            camera.position.y += (mouse.y * 10 - camera.position.y) * 0.05;
-            camera.lookAt(scene.position);
+            const elapsed = clock.getElapsedTime();
+            material.uniforms.uTime.value = elapsed;
+
+            camera.position.x = Math.sin(elapsed * 0.12) * 3.4;
+            camera.position.y = Math.cos(elapsed * 0.15) * 1.7;
+            camera.lookAt(0, 0, 0);
+
             renderer.render(scene, camera);
         }
+
         animate();
 
         window.addEventListener('resize', () => {
+            const mobile = window.innerWidth < 768;
             camera.aspect = window.innerWidth / window.innerHeight;
+            camera.position.z = mobile ? 140 : 115;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
         });
     </script>
 </body>
