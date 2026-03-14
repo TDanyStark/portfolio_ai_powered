@@ -29,10 +29,11 @@
     const depthLayer = hero.querySelector('[data-depth-layer]');
     const backgroundLayer = hero.querySelector('[data-background-layer]');
     const revealLayer = hero.querySelector('[data-reveal-layer]');
+    const title = hero.querySelector('.hero__title');
     const titleLines = hero.querySelectorAll('[data-title-line]');
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    if (!depthLayer || !backgroundLayer || !revealLayer) {
+    if (!depthLayer || !backgroundLayer || !revealLayer || !title) {
         throw new Error('Cloud layers are missing in hero markup.');
     }
 
@@ -182,6 +183,34 @@
             0.15
         );
 
+    let pointerTargetX = 0;
+    let pointerTargetY = 0;
+    let pointerCurrentX = 0;
+    let pointerCurrentY = 0;
+
+    const onPointerMove = (event) => {
+        if (prefersReducedMotion) {
+            return;
+        }
+
+        const rect = hero.getBoundingClientRect();
+        const x = (event.clientX - rect.left) / rect.width;
+        const y = (event.clientY - rect.top) / rect.height;
+
+        pointerTargetX = Math.max(-1, Math.min(1, (x - 0.5) * 2));
+        pointerTargetY = Math.max(-1, Math.min(1, (y - 0.5) * 2));
+    };
+
+    const onPointerLeave = () => {
+        pointerTargetX = 0;
+        pointerTargetY = 0;
+    };
+
+    if (!prefersReducedMotion) {
+        hero.addEventListener('pointermove', onPointerMove);
+        hero.addEventListener('pointerleave', onPointerLeave);
+    }
+
     let previousTime = performance.now();
     let animationFrame = 0;
 
@@ -219,6 +248,20 @@
                 item.el.style.opacity = `${opacity}`;
                 item.el.style.transform = `translate3d(${item.x}px, ${item.y}px, ${item.z}px) rotate(${item.rotation}deg)`;
             }
+
+            pointerCurrentX += (pointerTargetX - pointerCurrentX) * 0.08;
+            pointerCurrentY += (pointerTargetY - pointerCurrentY) * 0.08;
+
+            const rotateY = pointerCurrentX * 8;
+            const rotateX = pointerCurrentY * -6;
+
+            title.style.transform = `rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(18px)`;
+            titleLines.forEach((line, index) => {
+                const depth = index === 0 ? 34 : 20;
+                const driftX = pointerCurrentX * (index === 0 ? 10 : 6);
+                const driftY = pointerCurrentY * (index === 0 ? 7 : 4);
+                line.style.transform = `translate3d(${driftX}px, ${driftY}px, ${depth}px)`;
+            });
         }
 
         animationFrame = requestAnimationFrame(updateDepthClouds);
@@ -242,6 +285,8 @@
         'beforeunload',
         () => {
             document.removeEventListener('visibilitychange', onVisibility);
+            hero.removeEventListener('pointermove', onPointerMove);
+            hero.removeEventListener('pointerleave', onPointerLeave);
             cancelAnimationFrame(animationFrame);
             backgroundClouds.forEach(({ tween, fadeTween }) => {
                 tween.kill();
@@ -320,6 +365,7 @@
         text-align: center;
         padding-inline: 24px;
         max-width: min(1140px, 100%);
+        transform-style: preserve-3d;
     }
 
     .hero__content::before {
@@ -355,14 +401,20 @@
         font-size: clamp(2rem, 9vw, 6.9rem);
         color: #08233d;
         -webkit-text-stroke: 1px rgba(230, 245, 255, 0.66);
+        transform-style: preserve-3d;
+        will-change: transform;
         text-shadow:
             0 2px 0 rgba(239, 249, 255, 0.86),
+            0 4px 0 rgba(207, 231, 249, 0.74),
+            0 6px 0 rgba(183, 215, 240, 0.62),
             0 12px 24px rgba(5, 28, 48, 0.34);
     }
 
     .hero__title span {
         opacity: 0;
         display: block;
+        transform-style: preserve-3d;
+        will-change: transform;
     }
 
     .hero__title-subline {
@@ -452,6 +504,14 @@
         .hero__kicker,
         .hero__title span {
             opacity: 1;
+        }
+
+        .hero__title {
+            transform: none !important;
+        }
+
+        .hero__title span {
+            transform: none !important;
         }
 
         .hero__reveal {
