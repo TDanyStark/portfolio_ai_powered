@@ -1,12 +1,9 @@
----
-import Welcome from "../components/Welcome.astro";
-import Layout from "../layouts/Layout.astro";
-
-// Welcome to Astro! Wondering what to do next? Check out the Astro documentation at https://docs.astro.build
-// Don't want to use any of this? Delete everything in this file, the `assets`, `components`, and `layouts` directories, and start fresh.
----
-
-<Layout>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daniel Amado - Hero</title>
     <style>
         /* === ESTILOS GLOBALES === */
         body, html {
@@ -19,8 +16,8 @@ import Layout from "../layouts/Layout.astro";
             font-family: 'Inter', -apple-system, sans-serif;
         }
 
-        /* === CAPA 1: VIDEO OVERLAY (Simulación del final del video) === */
-        #video-overlay {
+        /* === CAPA 1: VIDEO OVERLAY === */
+        #intro-video-container {
             position: absolute;
             top: 0;
             left: 0;
@@ -28,12 +25,13 @@ import Layout from "../layouts/Layout.astro";
             height: 100%;
             background-color: #000000;
             z-index: 30;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            color: #333;
-            font-family: monospace;
             pointer-events: none;
+        }
+
+        #intro-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover; /* Asegura que el video cubra toda la pantalla sin deformarse */
         }
 
         /* === CAPA 2: THREE.JS CANVAS === */
@@ -84,9 +82,11 @@ import Layout from "../layouts/Layout.astro";
 </head>
 <body>
 
-    <!-- Capa que simula las nubes oscuras del choque de tu avión -->
-    <div id="video-overlay">
-        [Simulación: Fin del video del F-35]
+    <!-- Capa de Video Real -->
+    <div class="video-overlay" id="intro-video-container">
+        <video id="intro-video" muted playsinline>
+            <source src="video.mp4" type="video/mp4" />
+        </video>
     </div>
 
     <!-- El lienzo de las Nubes / Logos -->
@@ -112,50 +112,53 @@ import Layout from "../layouts/Layout.astro";
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
         const scene = new THREE.Scene();
-        // Cámara ortográfica para que los logos se vean planos, o perspectiva. Usaremos Perspectiva.
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.z = 120;
 
         // ==========================================
-        // 2. GENERACIÓN DE DATOS (MOLDE DE LOS LOGOS)
+        // 2. TEXTURAS DE NUBES
         // ==========================================
-        // Usamos un canvas 2D oculto para dibujar texto/iconos y extraer las coordenadas de los píxeles
+        const textureLoader = new THREE.TextureLoader();
+        // Usamos una textura de humo pública muy popular en Three.js para darle el efecto de nube real
+        // Puedes cambiar esta URL por el asset generado con IA
+        const cloudTexture = textureLoader.load('cloud1.png');
+
+        // ==========================================
+        // 3. GENERACIÓN DE DATOS (MOLDE DE LOS LOGOS)
+        // ==========================================
         function getLogoCoordinates() {
             const tempCanvas = document.createElement('canvas');
             const ctx = tempCanvas.getContext('2d');
             tempCanvas.width = 1024;
             tempCanvas.height = 512;
 
-            // Limpiamos y preparamos fuente
             ctx.fillStyle = 'black';
             ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
             ctx.fillStyle = 'white';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             
-            // Dibujamos los "logos" (Usamos texto representativo para este ejemplo)
             ctx.font = 'bold 60px Arial';
             ctx.fillText('HTML', 200, 150);
             ctx.font = 'bold 70px Arial';
             ctx.fillText('JS', 800, 150);
             ctx.font = '80px Arial';
-            ctx.fillText('⚛', 512, 400); // React
+            ctx.fillText('⚛', 512, 400); 
             ctx.font = 'bold 60px Arial';
-            ctx.fillText('PY', 200, 400); // Python
+            ctx.fillText('PY', 200, 400); 
             ctx.font = 'bold 50px Arial';
             ctx.fillText('NEXT', 800, 400);
 
-            // Leemos los píxeles
             const imgData = ctx.getImageData(0, 0, tempCanvas.width, tempCanvas.height).data;
             const validCoordinates = [];
 
-            // Escaneamos la imagen. Si el píxel es blanco, guardamos su posición X, Y
-            for (let y = 0; y < tempCanvas.height; y += 2) { // +=2 para no tomar TODOS los pixeles y optimizar
-                for (let x = 0; x < tempCanvas.width; x += 2) {
+            // Aumentamos el muestreo (+3 en lugar de +2) para no tener excesivas partículas
+            // ya que ahora usan texturas densas de humo
+            for (let y = 0; y < tempCanvas.height; y += 3) { 
+                for (let x = 0; x < tempCanvas.width; x += 3) {
                     const index = (y * tempCanvas.width + x) * 4;
                     const r = imgData[index];
                     if (r > 128) {
-                        // Mapeamos las coordenadas del canvas (0 a 1024) al espacio 3D de Three.js (-50 a 50)
                         const posX = (x / tempCanvas.width - 0.5) * 160;
                         const posY = -(y / tempCanvas.height - 0.5) * 80;
                         validCoordinates.push(new THREE.Vector3(posX, posY, 0));
@@ -166,28 +169,26 @@ import Layout from "../layouts/Layout.astro";
         }
 
         const targetCoords = getLogoCoordinates();
-        const numParticles = 25000; // Cantidad de partículas para el efecto nube
+        // Menos partículas pero más grandes porque ahora son texturas de nubes densas
+        const numParticles = 12000; 
 
-        // Geometría
         const geometry = new THREE.BufferGeometry();
-        const positions = new Float32Array(numParticles * 3); // Posición actual / aleatoria
-        const targets = new Float32Array(numParticles * 3);   // Posición del logo
-        const sizes = new Float32Array(numParticles);         // Tamaño aleatorio para parecer nubes
+        const positions = new Float32Array(numParticles * 3);
+        const targets = new Float32Array(numParticles * 3);
+        const sizes = new Float32Array(numParticles);
 
         for (let i = 0; i < numParticles; i++) {
-            // Estado caótico inicial (Nubes dispersas llenando la pantalla)
-            positions[i * 3] = (Math.random() - 0.5) * 300;     // X
-            positions[i * 3 + 1] = (Math.random() - 0.5) * 200; // Y
-            positions[i * 3 + 2] = (Math.random() - 0.5) * 100; // Z profundidad
+            positions[i * 3] = (Math.random() - 0.5) * 400;     
+            positions[i * 3 + 1] = (Math.random() - 0.5) * 300; 
+            positions[i * 3 + 2] = (Math.random() - 0.5) * 200; 
 
-            // Escoger una coordenada objetivo aleatoria de nuestro molde de logos
             const target = targetCoords[Math.floor(Math.random() * targetCoords.length)];
             targets[i * 3] = target.x;
             targets[i * 3 + 1] = target.y;
-            // Añadimos un poco de grosor Z para que el logo no sea plano 100%
-            targets[i * 3 + 2] = (Math.random() - 0.5) * 10; 
+            targets[i * 3 + 2] = (Math.random() - 0.5) * 8; 
 
-            sizes[i] = Math.random() * 2.0 + 1.0;
+            // Partículas mucho más grandes para parecer nubes (10 a 30 de tamaño relativo)
+            sizes[i] = Math.random() * 20.0 + 10.0;
         }
 
         geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -195,14 +196,15 @@ import Layout from "../layouts/Layout.astro";
         geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
 
         // ==========================================
-        // 3. SHADERS MAGIC (GLSL)
+        // 4. SHADERS MAGIC (GLSL)
         // ==========================================
         const material = new THREE.ShaderMaterial({
             uniforms: {
                 uTime: { value: 0 },
-                uProgress: { value: 0 }, // 0 = Caos, 1 = Logos armados
-                uMouse: { value: new THREE.Vector3(-999, -999, 0) }, // Mouse fuera de pantalla inicial
-                uColorBase: { value: new THREE.Color('#00F0FF') } // Azul AI
+                uProgress: { value: 0 }, 
+                uMouse: { value: new THREE.Vector3(-999, -999, 0) }, 
+                uColorBase: { value: new THREE.Color('#00F0FF') },
+                uCloudTexture: { value: cloudTexture } // Pasamos la textura al Shader
             },
             vertexShader: `
                 uniform float uTime;
@@ -214,7 +216,6 @@ import Layout from "../layouts/Layout.astro";
                 
                 varying float vAlpha;
 
-                // Función básica de ruido 3D para la turbulencia
                 vec3 noise3D(vec3 p) {
                     return vec3(
                         sin(p.y * 10.0 + uTime) * cos(p.z * 5.0 + uTime),
@@ -224,138 +225,130 @@ import Layout from "../layouts/Layout.astro";
                 }
 
                 void main() {
-                    // 1. Interpolar entre Caos (position) y Logo (aTarget)
                     vec3 finalPos = mix(position, aTarget, uProgress);
 
-                    // 2. Interacción del Mouse (El "Desarmador")
-                    // Si el mouse se acerca, aplicamos una fuerza de repulsión y ruido
                     float distToMouse = distance(finalPos.xy, uMouse.xy);
-                    float interactionRadius = 20.0; // Área de efecto del mouse
+                    float interactionRadius = 25.0; 
                     
                     if (distToMouse < interactionRadius && uProgress > 0.5) {
                         float force = (interactionRadius - distToMouse) / interactionRadius;
-                        // Añadir ruido salvaje
                         vec3 turbulence = noise3D(finalPos * 0.1) * force * 15.0;
-                        // Empujar hacia afuera del mouse
                         vec3 push = normalize(finalPos - vec3(uMouse.xy, 0.0)) * force * 10.0;
-                        
                         finalPos += turbulence + push;
                     }
 
-                    // 3. Flotación constante (orgánica)
-                    finalPos.y += sin(uTime * 2.0 + aTarget.x * 0.1) * 0.5 * uProgress;
+                    finalPos.y += sin(uTime * 1.5 + aTarget.x * 0.1) * 0.8 * uProgress;
 
                     vec4 mvPosition = modelViewMatrix * vec4(finalPos, 1.0);
                     
-                    // Tamaño basado en profundidad (perspectiva de las partículas)
-                    gl_PointSize = aSize * (150.0 / -mvPosition.z);
+                    // Incrementamos drásticamente el multiplicador de tamaño para las texturas
+                    gl_PointSize = aSize * (300.0 / -mvPosition.z);
                     gl_Position = projectionMatrix * mvPosition;
 
-                    // Opacidad basada en qué tan armada está la nube
-                    vAlpha = mix(0.1, 0.6, uProgress);
+                    vAlpha = mix(0.1, 0.4, uProgress); // Nubes suaves y semitransparentes
                 }
             `,
             fragmentShader: `
                 uniform vec3 uColorBase;
+                uniform sampler2D uCloudTexture;
                 varying float vAlpha;
 
                 void main() {
-                    // Crear un circulo suave (efecto nube/humo) en lugar de cuadrados duros
-                    vec2 uv = gl_PointCoord.xy - vec2(0.5);
-                    float dist = length(uv);
-                    if (dist > 0.5) discard;
+                    // Mapeamos la textura de nube sobre la partícula
+                    vec4 texColor = texture2D(uCloudTexture, gl_PointCoord);
                     
-                    // Borde difuminado
-                    float softEdge = 1.0 - smoothstep(0.1, 0.5, dist);
-                    
-                    gl_FragColor = vec4(uColorBase, vAlpha * softEdge);
+                    // Mezclamos el color base (Azul) con la textura y la opacidad global
+                    // El ".r" funciona bien para texturas de humo en escala de grises
+                    gl_FragColor = vec4(uColorBase * texColor.rgb, vAlpha * texColor.r);
                 }
             `,
             transparent: true,
             depthWrite: false,
-            blending: THREE.AdditiveBlending // Le da ese brillo técnico/energético
+            blending: THREE.AdditiveBlending // Para que las nubes se mezclen luminosamente
         });
 
         const particleSystem = new THREE.Points(geometry, material);
         scene.add(particleSystem);
 
         // ==========================================
-        // 4. INTERACCIÓN DEL MOUSE (Raycaster)
+        // 5. INTERACCIÓN DEL MOUSE
         // ==========================================
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
-        const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0); // Plano invisible Z=0 para el raycast
+        const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0); 
         const targetPoint = new THREE.Vector3();
 
         window.addEventListener('mousemove', (event) => {
-            // Normalizar coordenadas del mouse (-1 a +1)
             mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
-            // Lanzar rayo desde la cámara
             raycaster.setFromCamera(mouse, camera);
-            
-            // Encontrar punto de intersección en el plano Z=0
             raycaster.ray.intersectPlane(plane, targetPoint);
-            
-            // Actualizar uniform del mouse
             material.uniforms.uMouse.value.copy(targetPoint);
         });
 
         // ==========================================
-        // 5. ANIMACIÓN Y "HANDSHAKE" (GSAP)
+        // 6. ANIMACIÓN Y VIDEO LOGIC
         // ==========================================
-        // Simulamos que el video de fondo terminó de reproducirse
-        setTimeout(() => {
-            const tl = gsap.timeline();
+        const video = document.getElementById('intro-video');
+        const videoContainer = document.getElementById('intro-video-container');
+        let transitionStarted = false;
 
-            // 1. Quitar el "White/Dark-out" del video
-            tl.to("#video-overlay", {
+        function startMagic() {
+            if(transitionStarted) return;
+            transitionStarted = true;
+
+            const tl = gsap.timeline();
+            tl.to(videoContainer, {
                 opacity: 0,
                 duration: 2,
                 ease: "power2.inOut"
             });
-
-            // 2. Revelar los Textos (Daniel Amado)
             tl.to("#hero-ui", {
                 opacity: 1,
                 duration: 2,
                 ease: "power2.out"
             }, "-=1.0");
-
-            // 3. LA MAGIA: Condensar las nubes aleatorias en los Logos
             tl.to(material.uniforms.uProgress, {
                 value: 1,
-                duration: 4,
+                duration: 5,
                 ease: "power3.inOut"
             }, "-=1.5");
+        }
 
-        }, 1000); // Espera 1 segundo de "video" antes de iniciar la magia
+        // Intentar reproducir automáticamente
+        video.play().catch(e => console.warn("Autoplay prevenido por el navegador. Se necesita interacción.", e));
+
+        // Escuchar el progreso del video (Ej: iniciar 2 segundos antes de que termine)
+        video.addEventListener('timeupdate', () => {
+            if (video.duration > 0 && video.currentTime >= video.duration - 2) {
+                startMagic();
+            }
+        });
+
+        // Plan de Respaldo: Si el video no carga o da error, iniciamos a los 3 segundos.
+        setTimeout(() => {
+            if(!transitionStarted) startMagic();
+        }, 3000);
 
         // ==========================================
-        // 6. RENDER LOOP Y RESIZE
+        // 7. RENDER LOOP Y RESIZE
         // ==========================================
         const clock = new THREE.Clock();
-
         function animate() {
             requestAnimationFrame(animate);
             material.uniforms.uTime.value = clock.getElapsedTime();
-            
-            // Rotación sutil de la cámara para efecto parallax
             camera.position.x += (mouse.x * 10 - camera.position.x) * 0.05;
             camera.position.y += (mouse.y * 10 - camera.position.y) * 0.05;
             camera.lookAt(scene.position);
-
             renderer.render(scene, camera);
         }
-
         animate();
 
-        // Responsive
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
     </script>
-</Layout>
+</body>
+</html>
