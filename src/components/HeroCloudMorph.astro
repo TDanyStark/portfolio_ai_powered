@@ -66,7 +66,6 @@
 
     const depthClouds = [];
     const backgroundClouds = [];
-    const techDots = [];
     const techParticles = [];
     const wordPointCache = new Map();
     const techCycleCalls = [];
@@ -290,91 +289,28 @@
         while (techCycleCalls.length > 0) {
             techCycleCalls.pop()?.kill();
         }
-
-        gsap.killTweensOf(techDots);
     };
 
-    const initTechDots = () => {
+    const initTechParticles = () => {
         techWordLayer.innerHTML = '';
-        techDots.length = 0;
-        const fragment = document.createDocumentFragment();
+        techParticles.length = 0;
 
         for (let i = 0; i < techParticleCount; i += 1) {
-            const dot = document.createElement('span');
-            dot.className = 'tech-cloud-dot';
-            dot.style.setProperty('--cloud-tex', `url("${pickTexture()}")`);
-            dot.style.opacity = '0';
-            fragment.append(dot);
-            techDots.push(dot);
+            createTechParticle();
         }
-
-        techWordLayer.append(fragment);
-    };
-
-    const animateTechAssemble = (index, fromBelow = false) => {
-        activeWordIndex = index;
-        activeSequenceMode = 'assemble';
-        const word = techWords[index];
-        const points = getWordPoints(word.label);
-
-        for (let i = 0; i < techDots.length; i += 1) {
-            const dot = techDots[i];
-            const point = points[i];
-            dot.style.setProperty('--dot-color', word.color);
-
-            if (!point) {
-                gsap.to(dot, {
-                    autoAlpha: 0,
-                    duration: 0.6,
-                    ease: 'sine.out',
-                });
-                continue;
-            }
-
-            if (fromBelow) {
-                gsap.set(dot, {
-                    x: random(-stageWidth * 0.34, stageWidth * 0.34),
-                    y: stageHeight * 1.3 + random(40, 180),
-                    scale: random(0.35, 0.8),
-                    autoAlpha: 0,
-                    filter: 'blur(8px)',
-                });
-            }
-
-            gsap.to(dot, {
-                x: point.x,
-                y: point.y,
-                scale: random(0.9, 1.26),
-                autoAlpha: random(0.9, 1),
-                filter: 'blur(0px)',
-                duration: random(0.85, 1.2),
-                delay: i * 0.0016,
-                ease: 'power3.out',
-            });
-        }
-    };
-
-    const animateTechDisassemble = () => {
-        activeSequenceMode = 'scatter';
-
-        gsap.to(techDots, {
-            y: `+=${stageHeight * 1.05}`,
-            autoAlpha: 0,
-            scale: 0.62,
-            filter: 'blur(7px)',
-            duration: 1.05,
-            stagger: { each: 0.0016, from: 'random' },
-            ease: 'power2.inOut',
-        });
     };
 
     const scheduleTechCycle = () => {
-        const holdCall = gsap.delayedCall(2, () => {
-            animateTechDisassemble();
+        const holdCall = gsap.delayedCall(2.15, () => {
+            const scatterDirection = activeWordIndex % 2 === 0 ? 'depth' : 'below';
+            assignScatterTargets(activeWordIndex, scatterDirection);
 
-            const nextCall = gsap.delayedCall(1.12, () => {
+            const nextCall = gsap.delayedCall(0.95, () => {
                 const nextIndex = (activeWordIndex + 1) % techWords.length;
-                animateTechAssemble(nextIndex, true);
+                assignWordTargets(nextIndex, {
+                    resetFromBelow: scatterDirection === 'below',
+                    resetFromDepth: scatterDirection === 'depth',
+                });
                 scheduleTechCycle();
             });
 
@@ -517,8 +453,8 @@
         techFallback.hidden = false;
     } else {
         techFallback.hidden = true;
-        initTechDots();
-        animateTechAssemble(0, true);
+        initTechParticles();
+        assignWordTargets(0, { resetFromBelow: true });
         scheduleTechCycle();
     }
 
@@ -594,7 +530,6 @@
                     item.vx = random(-38, 38);
                     item.vz = random(120, 240);
                     item.rotation = random(-10, 10);
-                    item.el.src = pickTexture();
                 }
 
                 if (item.x > 550 || item.x < -550) {
@@ -671,8 +606,8 @@
 
             if (!prefersReducedMotion) {
                 clearTechCycle();
-                initTechDots();
-                animateTechAssemble(activeWordIndex, true);
+                initTechParticles();
+                assignWordTargets(activeWordIndex, { resetFromBelow: true });
                 scheduleTechCycle();
             }
         }, 80);
