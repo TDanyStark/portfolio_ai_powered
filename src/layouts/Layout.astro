@@ -1,12 +1,21 @@
+---
+interface Props {
+	title?: string;
+	lang?: string;
+}
+
+const { title = 'Daniel Amado - Portfolio', lang = 'es' } = Astro.props;
+---
+
 <!doctype html>
-<html lang="en">
+<html lang={lang}>
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width" />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<link rel="icon" href="/favicon.ico" />
 		<meta name="generator" content={Astro.generator} />
-		<title>Astro Basics</title>
+		<title>{title}</title>
 	</head>
 	<body>
 		<slot />
@@ -19,5 +28,9 @@
 		margin: 0;
 		width: 100%;
 		height: 100%;
+	}
+
+	* {
+		box-sizing: border-box;
 	}
 </style>
