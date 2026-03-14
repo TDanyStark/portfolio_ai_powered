@@ -6,10 +6,9 @@
     <div class="hero__background" data-background-layer aria-hidden="true"></div>
 
     <div class="hero__content">
-        <p class="hero__kicker">Piloto Digital // Copiloto IA</p>
         <h1 class="hero__title" aria-label="Daniel Amado Fullstack AI-Powered">
             <span data-title-line>DANIEL AMADO</span>
-            <span data-title-line>FULLSTACK AI-POWERED</span>
+            <span class="hero__title-subline" data-title-line>FULLSTACK AI-POWERED</span>
         </h1>
     </div>
 
@@ -181,12 +180,6 @@
             { autoAlpha: 0.98 },
             { autoAlpha: 0.2, duration: 2.6, ease: 'sine.out' },
             0.15
-        )
-        .fromTo(
-            hero.querySelector('.hero__kicker'),
-            { autoAlpha: 0, y: 28 },
-            { autoAlpha: 1, y: 0, duration: 0.9 },
-            0
         );
 
     let previousTime = performance.now();
@@ -370,6 +363,12 @@
     .hero__title span {
         opacity: 0;
         display: block;
+    }
+
+    .hero__title-subline {
+        white-space: nowrap;
+        font-size: clamp(0.95rem, 3.9vw, 2.8rem);
+        letter-spacing: 0.11em;
     }
 
     .hero__reveal {
