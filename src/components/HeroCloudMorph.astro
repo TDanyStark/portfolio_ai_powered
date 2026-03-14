@@ -65,12 +65,12 @@
     const depthClouds = [];
     const backgroundClouds = [];
     const techParticles = [];
-    const sequenceCalls = [];
     const wordPointCache = new Map();
 
     let activeWordIndex = 0;
     let activeSequenceMode = 'assemble';
-    let activeSequenceScheduled = false;
+    let isTransitioningWord = false;
+    let stageHoverArmed = true;
     let stageWidth = 0;
     let stageHeight = 0;
     let resizeTimer = 0;
@@ -81,13 +81,6 @@
     const smoothStep = (edge0, edge1, value) => {
         const clamped = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
         return clamped * clamped * (3 - 2 * clamped);
-    };
-
-    const clearSequenceCalls = () => {
-        while (sequenceCalls.length > 0) {
-            const call = sequenceCalls.pop();
-            call?.kill();
-        }
     };
 
     const shuffle = (list) => {
@@ -137,14 +130,20 @@
 
         do {
             sampleContext.clearRect(0, 0, stageWidth, stageHeight);
+            sampleContext.lineJoin = 'round';
+            sampleContext.lineCap = 'round';
+            sampleContext.lineWidth = Math.max(8, fontSize * 0.11);
             sampleContext.font = `900 ${fontSize}px Orbitron, sans-serif`;
-            sampleContext.fillText(word, stageWidth / 2, stageHeight / 2);
+            sampleContext.strokeText(word, stageWidth / 2, stageHeight / 2);
             fontSize -= 8;
         } while (sampleContext.measureText(word).width > stageWidth * 0.82 && fontSize > stageHeight * 0.34);
 
         sampleContext.clearRect(0, 0, stageWidth, stageHeight);
+        sampleContext.lineJoin = 'round';
+        sampleContext.lineCap = 'round';
+        sampleContext.lineWidth = Math.max(8, (fontSize + 8) * 0.11);
         sampleContext.font = `900 ${fontSize + 8}px Orbitron, sans-serif`;
-        sampleContext.fillText(word, stageWidth / 2, stageHeight / 2);
+        sampleContext.strokeText(word, stageWidth / 2, stageHeight / 2);
 
         const imageData = sampleContext.getImageData(0, 0, sampleCanvas.width, sampleCanvas.height).data;
         const sampleStep = stageWidth <= 560 ? 8 : 7;
@@ -215,7 +214,16 @@
         particle.rotation = random(-160, 160);
     };
 
-    const assignWordTargets = (index, { resetFromDepth = false } = {}) => {
+    const seedParticleFromBelow = (particle) => {
+        particle.x = random(-stageWidth * 0.72, stageWidth * 0.72);
+        particle.y = stageHeight * 1.25 + random(50, 220);
+        particle.z = random(-220, 110);
+        particle.opacity = random(0.04, 0.12);
+        particle.scale = random(0.5, 1.24);
+        particle.rotation = random(-120, 120);
+    };
+
+    const assignWordTargets = (index, { resetFromBelow = false, resetFromDepth = false } = {}) => {
         activeWordIndex = index;
         activeSequenceMode = 'assemble';
 
@@ -224,6 +232,10 @@
         const stageDepth = Math.max(880, stageWidth * 1.2);
 
         techParticles.forEach((particle, particleIndex) => {
+            if (resetFromBelow) {
+                seedParticleFromBelow(particle);
+            }
+
             if (resetFromDepth) {
                 seedParticleFromDepth(particle);
             }
@@ -234,9 +246,9 @@
             if (point) {
                 particle.tx = point.x + random(-3.2, 3.2);
                 particle.ty = point.y + random(-2.8, 2.8);
-                particle.tz = random(-24, 38);
-                particle.toOpacity = random(0.52, 0.96);
-                particle.toScale = random(0.72, 1.34);
+                particle.tz = random(-18, 34);
+                particle.toOpacity = random(0.62, 1);
+                particle.toScale = random(0.76, 1.42);
                 particle.targetRotation = random(-16, 16);
             } else {
                 particle.tx = random(-stageWidth * 0.72, stageWidth * 0.72);
@@ -249,7 +261,7 @@
         });
     };
 
-    const assignScatterTargets = (index) => {
+    const assignScatterTargets = (index, direction = 'depth') => {
         activeWordIndex = index;
         activeSequenceMode = 'scatter';
 
@@ -258,31 +270,40 @@
 
         techParticles.forEach((particle) => {
             particle.el.style.setProperty('--particle-color', word.color);
-            particle.tx = random(-stageWidth * 0.8, stageWidth * 0.8);
-            particle.ty = random(-stageHeight * 0.74, stageHeight * 0.74);
-            particle.tz = random(-stageDepth, -stageDepth * 0.44);
-            particle.toOpacity = random(0.04, 0.18);
+            particle.tx = random(-stageWidth * 0.84, stageWidth * 0.84);
+            particle.ty =
+                direction === 'below'
+                    ? stageHeight * 1.3 + random(60, 260)
+                    : random(-stageHeight * 0.74, stageHeight * 0.74);
+            particle.tz = direction === 'below' ? random(-160, 120) : random(-stageDepth, -stageDepth * 0.44);
+            particle.toOpacity = random(0.01, 0.12);
             particle.toScale = random(0.28, 0.92);
-            particle.targetRotation = random(-110, 110);
+            particle.targetRotation = random(-140, 140);
         });
     };
 
-    const scheduleWordCycle = (index, { resetFromDepth = false } = {}) => {
-        clearSequenceCalls();
-        activeSequenceScheduled = true;
-        assignWordTargets(index, { resetFromDepth });
+    const showWordFromBelow = (index) => {
+        assignWordTargets(index, { resetFromBelow: true });
+    };
 
-        const scatterCall = gsap.delayedCall(3.55, () => {
-            assignScatterTargets(index);
+    const transitionToNextWord = () => {
+        if (isTransitioningWord || prefersReducedMotion) {
+            return;
+        }
 
-            const nextCall = gsap.delayedCall(2.35, () => {
-                scheduleWordCycle((index + 1) % techWords.length, { resetFromDepth: false });
-            });
+        isTransitioningWord = true;
+        stageHoverArmed = false;
 
-            sequenceCalls.push(nextCall);
-        });
+        assignScatterTargets(activeWordIndex, 'below');
 
-        sequenceCalls.push(scatterCall);
+        window.setTimeout(() => {
+            const nextIndex = (activeWordIndex + 1) % techWords.length;
+            showWordFromBelow(nextIndex);
+
+            window.setTimeout(() => {
+                isTransitioningWord = false;
+            }, 1050);
+        }, 760);
     };
 
     const applySequenceLayout = () => {
@@ -428,7 +449,7 @@
             createTechParticle();
         }
 
-        scheduleWordCycle(0, { resetFromDepth: true });
+        showWordFromBelow(0);
     }
 
     const timeline = gsap.timeline({ defaults: { ease: 'power3.out' } });
@@ -479,6 +500,18 @@
     if (!prefersReducedMotion) {
         hero.addEventListener('pointermove', onPointerMove);
         hero.addEventListener('pointerleave', onPointerLeave);
+
+        techStage.addEventListener('pointerenter', () => {
+            if (!stageHoverArmed) {
+                return;
+            }
+
+            transitionToNextWord();
+        });
+
+        techStage.addEventListener('pointerleave', () => {
+            stageHoverArmed = true;
+        });
     }
 
     let previousTime = performance.now();
@@ -526,10 +559,10 @@
                 const driftX = Math.sin(now * 0.00125 * particle.driftSpeed + particle.phase) * particle.driftX * driftMultiplier;
                 const driftY = Math.cos(now * 0.00105 * particle.driftSpeed + particle.phase) * particle.driftY * driftMultiplier;
 
-                particle.x += (particle.tx - particle.x) * 0.085;
-                particle.y += (particle.ty - particle.y) * 0.09;
+                particle.x += (particle.tx - particle.x) * 0.086;
+                particle.y += (particle.ty - particle.y) * (activeSequenceMode === 'assemble' ? 0.1 : 0.055);
                 particle.z += (particle.tz - particle.z) * 0.072;
-                particle.opacity += (particle.toOpacity - particle.opacity) * 0.09;
+                particle.opacity += (particle.toOpacity - particle.opacity) * (activeSequenceMode === 'assemble' ? 0.1 : 0.04);
                 particle.scale += (particle.toScale - particle.scale) * 0.08;
                 particle.rotation += (particle.targetRotation - particle.rotation) * 0.065;
 
@@ -598,7 +631,6 @@
                 tween.kill();
                 fadeTween.kill();
             });
-            clearSequenceCalls();
             timeline.kill();
         },
         { once: true }
@@ -738,8 +770,9 @@
         width: min(920px, 100%);
         height: clamp(120px, 16vw, 198px);
         transform-style: preserve-3d;
-        pointer-events: none;
+        pointer-events: auto;
         isolation: isolate;
+        cursor: pointer;
     }
 
     .hero__tech-stage::before {
@@ -750,6 +783,21 @@
         background: radial-gradient(circle at center, rgba(236, 246, 255, 0.46) 0%, rgba(236, 246, 255, 0) 72%);
         filter: blur(24px);
         opacity: 0.62;
+    }
+
+    .hero__tech-stage::after {
+        content: 'HOVER TO SWITCH STACK';
+        position: absolute;
+        left: 50%;
+        bottom: -1.6rem;
+        transform: translateX(-50%);
+        font-family: 'Rajdhani', 'Segoe UI', Tahoma, sans-serif;
+        font-size: clamp(0.68rem, 1vw, 0.84rem);
+        letter-spacing: 0.24em;
+        color: rgba(10, 38, 62, 0.72);
+        text-transform: uppercase;
+        white-space: nowrap;
+        opacity: 0.72;
     }
 
     .hero__tech-fallback {
@@ -838,7 +886,7 @@
         mask-repeat: no-repeat;
         mask-size: contain;
         transition: background 0.45s ease, box-shadow 0.45s ease;
-        filter: blur(0.2px) saturate(1.08);
+        filter: blur(0.45px) saturate(1.08);
     }
 
     @media (max-width: 920px) {
@@ -858,6 +906,11 @@
         .hero__tech-stage {
             width: min(100%, 720px);
             height: clamp(112px, 18vw, 170px);
+        }
+
+        .hero__tech-stage::after {
+            bottom: -1.3rem;
+            letter-spacing: 0.18em;
         }
     }
 
@@ -881,6 +934,11 @@
 
         .hero__tech-stage {
             height: clamp(104px, 22vw, 150px);
+        }
+
+        .hero__tech-stage::after {
+            content: 'HOVER';
+            bottom: -1.1rem;
         }
 
         .tech-cloud-particle {
