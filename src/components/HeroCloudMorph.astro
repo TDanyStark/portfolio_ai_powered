@@ -10,6 +10,17 @@
             <span data-title-line>DANIEL AMADO</span>
             <span class="hero__title-subline" data-title-line>FULLSTACK AI-POWERED</span>
         </h1>
+
+        <div class="hero__tech-stage" data-tech-stage aria-hidden="true">
+            <div class="hero__tech-fallback" data-tech-fallback hidden>
+                <span style="--tech-color: #61dafb;">REACT</span>
+                <span style="--tech-color: #3776ab;">PYTHON</span>
+                <span style="--tech-color: #111827;">NEXT</span>
+                <span style="--tech-color: #264de4;">CSS</span>
+                <span style="--tech-color: #e34f26;">HTML</span>
+                <span style="--tech-color: #00758f;">MYSQL</span>
+            </div>
+        </div>
     </div>
 
     <div class="hero__reveal" data-reveal-layer aria-hidden="true"></div>
@@ -29,24 +40,265 @@
     const depthLayer = hero.querySelector('[data-depth-layer]');
     const backgroundLayer = hero.querySelector('[data-background-layer]');
     const revealLayer = hero.querySelector('[data-reveal-layer]');
+    const techStage = hero.querySelector('[data-tech-stage]');
+    const techFallback = hero.querySelector('[data-tech-fallback]');
     const title = hero.querySelector('.hero__title');
     const titleLines = hero.querySelectorAll('[data-title-line]');
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    if (!depthLayer || !backgroundLayer || !revealLayer || !title) {
+    if (!depthLayer || !backgroundLayer || !revealLayer || !techStage || !techFallback || !title) {
         throw new Error('Cloud layers are missing in hero markup.');
     }
 
     const random = (min, max) => min + Math.random() * (max - min);
     const pickTexture = () => textures[Math.floor(Math.random() * textures.length)];
+    const techWords = [
+        { label: 'REACT', color: '#61dafb' },
+        { label: 'PYTHON', color: '#3776ab' },
+        { label: 'NEXT', color: '#111827' },
+        { label: 'CSS', color: '#264de4' },
+        { label: 'HTML', color: '#e34f26' },
+        { label: 'MYSQL', color: '#00758f' },
+    ];
+    const techParticleCount = window.innerWidth <= 720 ? 132 : 184;
 
     const depthClouds = [];
     const backgroundClouds = [];
+    const techParticles = [];
+    const sequenceCalls = [];
+    const wordPointCache = new Map();
+
+    let activeWordIndex = 0;
+    let activeSequenceMode = 'assemble';
+    let activeSequenceScheduled = false;
+    let stageWidth = 0;
+    let stageHeight = 0;
+    let resizeTimer = 0;
+
+    const sampleCanvas = document.createElement('canvas');
+    const sampleContext = sampleCanvas.getContext('2d', { willReadFrequently: true });
 
     const smoothStep = (edge0, edge1, value) => {
         const clamped = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
         return clamped * clamped * (3 - 2 * clamped);
     };
+
+    const clearSequenceCalls = () => {
+        while (sequenceCalls.length > 0) {
+            const call = sequenceCalls.pop();
+            call?.kill();
+        }
+    };
+
+    const shuffle = (list) => {
+        const cloned = [...list];
+
+        for (let i = cloned.length - 1; i > 0; i -= 1) {
+            const swapIndex = Math.floor(Math.random() * (i + 1));
+            const current = cloned[i];
+            cloned[i] = cloned[swapIndex];
+            cloned[swapIndex] = current;
+        }
+
+        return cloned;
+    };
+
+    const updateStageSize = () => {
+        const bounds = techStage.getBoundingClientRect();
+        stageWidth = Math.max(bounds.width, 280);
+        stageHeight = Math.max(bounds.height, 120);
+        wordPointCache.clear();
+    };
+
+    const getWordPoints = (word) => {
+        if (!sampleContext) {
+            return [];
+        }
+
+        const cacheKey = `${word}:${Math.round(stageWidth)}:${Math.round(stageHeight)}:${techParticleCount}`;
+        const cached = wordPointCache.get(cacheKey);
+
+        if (cached) {
+            return cached;
+        }
+
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        sampleCanvas.width = Math.max(1, Math.round(stageWidth * dpr));
+        sampleCanvas.height = Math.max(1, Math.round(stageHeight * dpr));
+
+        sampleContext.setTransform(1, 0, 0, 1, 0, 0);
+        sampleContext.clearRect(0, 0, sampleCanvas.width, sampleCanvas.height);
+        sampleContext.scale(dpr, dpr);
+
+        let fontSize = stageHeight * 0.68;
+        sampleContext.textAlign = 'center';
+        sampleContext.textBaseline = 'middle';
+        sampleContext.fillStyle = '#ffffff';
+
+        do {
+            sampleContext.clearRect(0, 0, stageWidth, stageHeight);
+            sampleContext.font = `900 ${fontSize}px Orbitron, sans-serif`;
+            sampleContext.fillText(word, stageWidth / 2, stageHeight / 2);
+            fontSize -= 8;
+        } while (sampleContext.measureText(word).width > stageWidth * 0.82 && fontSize > stageHeight * 0.34);
+
+        sampleContext.clearRect(0, 0, stageWidth, stageHeight);
+        sampleContext.font = `900 ${fontSize + 8}px Orbitron, sans-serif`;
+        sampleContext.fillText(word, stageWidth / 2, stageHeight / 2);
+
+        const imageData = sampleContext.getImageData(0, 0, sampleCanvas.width, sampleCanvas.height).data;
+        const sampleStep = stageWidth <= 560 ? 8 : 7;
+        const points = [];
+
+        for (let y = 0; y < stageHeight; y += sampleStep) {
+            for (let x = 0; x < stageWidth; x += sampleStep) {
+                const sampleX = Math.min(sampleCanvas.width - 1, Math.floor(x * dpr));
+                const sampleY = Math.min(sampleCanvas.height - 1, Math.floor(y * dpr));
+                const alpha = imageData[(sampleY * sampleCanvas.width + sampleX) * 4 + 3];
+
+                if (alpha > 110) {
+                    points.push({
+                        x: x - stageWidth / 2,
+                        y: y - stageHeight / 2,
+                    });
+                }
+            }
+        }
+
+        const stride = Math.max(1, Math.ceil(points.length / Math.max(1, techParticleCount - 12)));
+        const reduced = [];
+
+        for (let index = 0; index < points.length; index += stride) {
+            reduced.push(points[index]);
+        }
+
+        const output = shuffle(reduced).slice(0, techParticleCount);
+        wordPointCache.set(cacheKey, output);
+        return output;
+    };
+
+    const createTechParticle = () => {
+        const particle = document.createElement('span');
+        particle.className = 'tech-cloud-particle';
+        particle.style.setProperty('--cloud-mask', `url("${pickTexture()}")`);
+        techStage.append(particle);
+
+        const state = {
+            el: particle,
+            x: random(-stageWidth * 0.5, stageWidth * 0.5),
+            y: random(-stageHeight * 0.45, stageHeight * 0.45),
+            z: random(-1400, -720),
+            tx: 0,
+            ty: 0,
+            tz: 0,
+            opacity: 0,
+            toOpacity: 0,
+            scale: random(0.5, 1.4),
+            toScale: 1,
+            rotation: random(-120, 120),
+            targetRotation: 0,
+            driftX: random(2.4, 8.8),
+            driftY: random(1.8, 5.6),
+            driftSpeed: random(0.65, 1.4),
+            phase: random(0, Math.PI * 2),
+        };
+
+        techParticles.push(state);
+    };
+
+    const seedParticleFromDepth = (particle) => {
+        particle.x = random(-stageWidth * 0.68, stageWidth * 0.68);
+        particle.y = random(-stageHeight * 0.42, stageHeight * 0.42);
+        particle.z = random(-1450, -780);
+        particle.opacity = random(0.02, 0.08);
+        particle.scale = random(0.34, 1.18);
+        particle.rotation = random(-160, 160);
+    };
+
+    const assignWordTargets = (index, { resetFromDepth = false } = {}) => {
+        activeWordIndex = index;
+        activeSequenceMode = 'assemble';
+
+        const word = techWords[index];
+        const points = getWordPoints(word.label);
+        const stageDepth = Math.max(880, stageWidth * 1.2);
+
+        techParticles.forEach((particle, particleIndex) => {
+            if (resetFromDepth) {
+                seedParticleFromDepth(particle);
+            }
+
+            const point = points[particleIndex];
+            particle.el.style.setProperty('--particle-color', word.color);
+
+            if (point) {
+                particle.tx = point.x + random(-3.2, 3.2);
+                particle.ty = point.y + random(-2.8, 2.8);
+                particle.tz = random(-24, 38);
+                particle.toOpacity = random(0.52, 0.96);
+                particle.toScale = random(0.72, 1.34);
+                particle.targetRotation = random(-16, 16);
+            } else {
+                particle.tx = random(-stageWidth * 0.72, stageWidth * 0.72);
+                particle.ty = random(-stageHeight * 0.52, stageHeight * 0.52);
+                particle.tz = random(-stageDepth, -stageDepth * 0.45);
+                particle.toOpacity = random(0.02, 0.14);
+                particle.toScale = random(0.3, 0.82);
+                particle.targetRotation = random(-70, 70);
+            }
+        });
+    };
+
+    const assignScatterTargets = (index) => {
+        activeWordIndex = index;
+        activeSequenceMode = 'scatter';
+
+        const word = techWords[index];
+        const stageDepth = Math.max(940, stageWidth * 1.34);
+
+        techParticles.forEach((particle) => {
+            particle.el.style.setProperty('--particle-color', word.color);
+            particle.tx = random(-stageWidth * 0.8, stageWidth * 0.8);
+            particle.ty = random(-stageHeight * 0.74, stageHeight * 0.74);
+            particle.tz = random(-stageDepth, -stageDepth * 0.44);
+            particle.toOpacity = random(0.04, 0.18);
+            particle.toScale = random(0.28, 0.92);
+            particle.targetRotation = random(-110, 110);
+        });
+    };
+
+    const scheduleWordCycle = (index, { resetFromDepth = false } = {}) => {
+        clearSequenceCalls();
+        activeSequenceScheduled = true;
+        assignWordTargets(index, { resetFromDepth });
+
+        const scatterCall = gsap.delayedCall(3.55, () => {
+            assignScatterTargets(index);
+
+            const nextCall = gsap.delayedCall(2.35, () => {
+                scheduleWordCycle((index + 1) % techWords.length, { resetFromDepth: false });
+            });
+
+            sequenceCalls.push(nextCall);
+        });
+
+        sequenceCalls.push(scatterCall);
+    };
+
+    const applySequenceLayout = () => {
+        if (prefersReducedMotion || techParticles.length === 0) {
+            return;
+        }
+
+        if (activeSequenceMode === 'scatter') {
+            assignScatterTargets(activeWordIndex);
+            return;
+        }
+
+        assignWordTargets(activeWordIndex);
+    };
+
+    updateStageSize();
 
     const createDepthCloud = () => {
         const cloud = document.createElement('img');
@@ -167,6 +419,18 @@
         createRevealCloud();
     }
 
+    if (prefersReducedMotion) {
+        techFallback.hidden = false;
+    } else {
+        techFallback.hidden = true;
+
+        for (let i = 0; i < techParticleCount; i += 1) {
+            createTechParticle();
+        }
+
+        scheduleWordCycle(0, { resetFromDepth: true });
+    }
+
     const timeline = gsap.timeline({ defaults: { ease: 'power3.out' } });
 
     timeline
@@ -175,6 +439,12 @@
             { yPercent: 120, autoAlpha: 0, filter: 'blur(14px)' },
             { yPercent: 0, autoAlpha: 1, filter: 'blur(0px)', duration: 1.2, stagger: 0.16 },
             0.35
+        )
+        .fromTo(
+            techStage,
+            { autoAlpha: 0, y: 28 },
+            { autoAlpha: 1, y: 0, duration: 1.5, ease: 'power2.out' },
+            0.9
         )
         .fromTo(
             revealLayer,
@@ -249,6 +519,25 @@
                 item.el.style.transform = `translate3d(${item.x}px, ${item.y}px, ${item.z}px) rotate(${item.rotation}deg)`;
             }
 
+            for (let i = 0; i < techParticles.length; i += 1) {
+                const particle = techParticles[i];
+                const depthRatio = Math.max(0, Math.min(1, 1 - Math.abs(particle.tz) / 1400));
+                const driftMultiplier = activeSequenceMode === 'assemble' ? 0.42 : 1;
+                const driftX = Math.sin(now * 0.00125 * particle.driftSpeed + particle.phase) * particle.driftX * driftMultiplier;
+                const driftY = Math.cos(now * 0.00105 * particle.driftSpeed + particle.phase) * particle.driftY * driftMultiplier;
+
+                particle.x += (particle.tx - particle.x) * 0.085;
+                particle.y += (particle.ty - particle.y) * 0.09;
+                particle.z += (particle.tz - particle.z) * 0.072;
+                particle.opacity += (particle.toOpacity - particle.opacity) * 0.09;
+                particle.scale += (particle.toScale - particle.scale) * 0.08;
+                particle.rotation += (particle.targetRotation - particle.rotation) * 0.065;
+
+                const opacity = Math.max(0, Math.min(1, particle.opacity * (0.72 + depthRatio * 0.45)));
+                particle.el.style.opacity = `${opacity}`;
+                particle.el.style.transform = `translate3d(${particle.x + driftX}px, ${particle.y + driftY}px, ${particle.z}px) scale(${particle.scale}) rotate(${particle.rotation}deg)`;
+            }
+
             pointerCurrentX += (pointerTargetX - pointerCurrentX) * 0.08;
             pointerCurrentY += (pointerTargetY - pointerCurrentY) * 0.08;
 
@@ -262,6 +551,8 @@
                 const driftY = pointerCurrentY * (index === 0 ? 7 : 4);
                 line.style.transform = `translate3d(${driftX}px, ${driftY}px, ${depth}px)`;
             });
+
+            techStage.style.transform = `translate3d(${pointerCurrentX * 18}px, ${pointerCurrentY * 10}px, 24px)`;
         }
 
         animationFrame = requestAnimationFrame(updateDepthClouds);
@@ -281,17 +572,33 @@
 
     document.addEventListener('visibilitychange', onVisibility);
 
+    const onResize = () => {
+        window.clearTimeout(resizeTimer);
+
+        resizeTimer = window.setTimeout(() => {
+            updateStageSize();
+            applySequenceLayout();
+        }, 80);
+    };
+
+    if (!prefersReducedMotion) {
+        window.addEventListener('resize', onResize);
+    }
+
     window.addEventListener(
         'beforeunload',
         () => {
             document.removeEventListener('visibilitychange', onVisibility);
             hero.removeEventListener('pointermove', onPointerMove);
             hero.removeEventListener('pointerleave', onPointerLeave);
+            window.removeEventListener('resize', onResize);
+            window.clearTimeout(resizeTimer);
             cancelAnimationFrame(animationFrame);
             backgroundClouds.forEach(({ tween, fadeTween }) => {
                 tween.kill();
                 fadeTween.kill();
             });
+            clearSequenceCalls();
             timeline.kill();
         },
         { once: true }
@@ -365,6 +672,9 @@
         text-align: center;
         padding-inline: 24px;
         max-width: min(1140px, 100%);
+        display: grid;
+        justify-items: center;
+        gap: clamp(20px, 4vw, 34px);
         transform-style: preserve-3d;
     }
 
@@ -423,6 +733,48 @@
         letter-spacing: 0.11em;
     }
 
+    .hero__tech-stage {
+        position: relative;
+        width: min(920px, 100%);
+        height: clamp(120px, 16vw, 198px);
+        transform-style: preserve-3d;
+        pointer-events: none;
+        isolation: isolate;
+    }
+
+    .hero__tech-stage::before {
+        content: '';
+        position: absolute;
+        inset: 16% 8%;
+        border-radius: 999px;
+        background: radial-gradient(circle at center, rgba(236, 246, 255, 0.46) 0%, rgba(236, 246, 255, 0) 72%);
+        filter: blur(24px);
+        opacity: 0.62;
+    }
+
+    .hero__tech-fallback {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        align-content: center;
+        gap: 10px 12px;
+    }
+
+    .hero__tech-fallback span {
+        padding: 0.5rem 0.85rem;
+        border-radius: 999px;
+        border: 1px solid color-mix(in srgb, var(--tech-color) 54%, white 46%);
+        background: color-mix(in srgb, var(--tech-color) 16%, white 84%);
+        color: color-mix(in srgb, var(--tech-color) 78%, #05203a 22%);
+        font-family: 'Orbitron', 'Segoe UI', Tahoma, sans-serif;
+        font-size: clamp(0.72rem, 1.6vw, 1rem);
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        box-shadow: 0 10px 30px color-mix(in srgb, var(--tech-color) 18%, transparent 82%);
+    }
+
     .hero__reveal {
         z-index: 6;
         mix-blend-mode: screen;
@@ -458,6 +810,37 @@
         filter: brightness(1.2) saturate(1.05);
     }
 
+    .tech-cloud-particle {
+        --particle-color: #61dafb;
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: clamp(20px, 3vw, 34px);
+        aspect-ratio: 1.65;
+        border-radius: 999px;
+        background:
+            radial-gradient(circle at 35% 38%, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.84) 22%, transparent 48%),
+            radial-gradient(circle at 65% 48%, color-mix(in srgb, var(--particle-color) 82%, white 18%) 0%, color-mix(in srgb, var(--particle-color) 54%, white 46%) 32%, rgba(255, 255, 255, 0) 72%),
+            color-mix(in srgb, var(--particle-color) 74%, white 26%);
+        box-shadow:
+            0 0 18px color-mix(in srgb, var(--particle-color) 44%, transparent 56%),
+            0 0 36px color-mix(in srgb, var(--particle-color) 28%, transparent 72%);
+        mix-blend-mode: screen;
+        opacity: 0;
+        transform: translate3d(0, 0, -900px) scale(0.4);
+        will-change: transform, opacity;
+        -webkit-mask-image: var(--cloud-mask);
+        -webkit-mask-position: center;
+        -webkit-mask-repeat: no-repeat;
+        -webkit-mask-size: contain;
+        mask-image: var(--cloud-mask);
+        mask-position: center;
+        mask-repeat: no-repeat;
+        mask-size: contain;
+        transition: background 0.45s ease, box-shadow 0.45s ease;
+        filter: blur(0.2px) saturate(1.08);
+    }
+
     @media (max-width: 920px) {
         .hero {
             perspective: 1100px;
@@ -470,6 +853,11 @@
 
         .cloud--depth {
             filter: brightness(1.07) contrast(0.9);
+        }
+
+        .hero__tech-stage {
+            width: min(100%, 720px);
+            height: clamp(112px, 18vw, 170px);
         }
     }
 
@@ -490,10 +878,19 @@
         .cloud--reveal {
             width: clamp(190px, 50vw, 350px);
         }
+
+        .hero__tech-stage {
+            height: clamp(104px, 22vw, 150px);
+        }
+
+        .tech-cloud-particle {
+            width: clamp(18px, 5vw, 28px);
+        }
     }
 
     @media (prefers-reduced-motion: reduce) {
         .cloud,
+        .tech-cloud-particle,
         .hero__kicker,
         .hero__title span,
         .hero__reveal {
@@ -516,6 +913,10 @@
 
         .hero__reveal {
             opacity: 0.18;
+        }
+
+        .hero__tech-stage {
+            transform: none !important;
         }
     }
 </style>
