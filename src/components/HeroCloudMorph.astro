@@ -1,8 +1,462 @@
-<section class="hero">
+<section class="hero" data-hero-cloud>
+    <div class="hero__sky-gradient" aria-hidden="true"></div>
+    <div class="hero__mist" aria-hidden="true"></div>
+
+    <div class="hero__depth" data-depth-layer aria-hidden="true"></div>
+    <div class="hero__background" data-background-layer aria-hidden="true"></div>
+
+    <div class="hero__content">
+        <p class="hero__kicker">Piloto Digital // Copiloto IA</p>
+        <h1 class="hero__title" aria-label="Daniel Amado Fullstack AI-Powered">
+            <span data-title-line>DANIEL AMADO</span>
+            <span data-title-line>FULLSTACK AI-POWERED</span>
+        </h1>
+    </div>
+
+    <div class="hero__reveal" data-reveal-layer aria-hidden="true"></div>
 </section>
 
-
 <script>
-    import * as THREE from 'three';
+    // @ts-nocheck
     import { gsap } from 'gsap';
+
+    const hero = document.querySelector('[data-hero-cloud]');
+
+    if (!hero) {
+        throw new Error('Hero root was not found.');
+    }
+
+    const textures = ['/cloud1.png', '/cloud2.png', '/cloud3.png'];
+    const depthLayer = hero.querySelector('[data-depth-layer]');
+    const backgroundLayer = hero.querySelector('[data-background-layer]');
+    const revealLayer = hero.querySelector('[data-reveal-layer]');
+    const titleLines = hero.querySelectorAll('[data-title-line]');
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (!depthLayer || !backgroundLayer || !revealLayer) {
+        throw new Error('Cloud layers are missing in hero markup.');
+    }
+
+    const random = (min, max) => min + Math.random() * (max - min);
+    const pickTexture = () => textures[Math.floor(Math.random() * textures.length)];
+
+    const depthClouds = [];
+    const backgroundClouds = [];
+
+    const smoothStep = (edge0, edge1, value) => {
+        const clamped = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
+        return clamped * clamped * (3 - 2 * clamped);
+    };
+
+    const createDepthCloud = () => {
+        const cloud = document.createElement('img');
+        cloud.className = 'cloud cloud--depth';
+        cloud.src = pickTexture();
+        cloud.alt = '';
+        cloud.decoding = 'async';
+        depthLayer.append(cloud);
+
+        const cloudState = {
+            el: cloud,
+            x: random(-420, 420),
+            y: random(-260, 220),
+            z: random(-1900, -120),
+            vz: random(120, 240),
+            vx: random(-38, 38),
+            drift: random(0.3, 1.1),
+            driftOffset: random(0, Math.PI * 2),
+            size: random(320, 620),
+            rotation: random(-8, 8),
+        };
+
+        cloud.style.width = `${cloudState.size}px`;
+        cloud.style.transform = `translate3d(${cloudState.x}px, ${cloudState.y}px, ${cloudState.z}px)`;
+        depthClouds.push(cloudState);
+    };
+
+    const createBackgroundCloud = () => {
+        const cloud = document.createElement('img');
+        cloud.className = 'cloud cloud--background';
+        cloud.src = pickTexture();
+        cloud.alt = '';
+        cloud.decoding = 'async';
+        backgroundLayer.append(cloud);
+
+        const duration = random(18, 32);
+        const delay = random(-16, 0);
+        const y = random(8, 90);
+        const scale = random(0.7, 1.55);
+        const opacity = random(0.14, 0.32);
+
+        gsap.set(cloud, {
+            top: `${y}%`,
+            scale,
+            autoAlpha: opacity,
+            xPercent: random(-12, 12),
+            rotate: random(-4, 4),
+        });
+
+        const peakAlpha = random(0.2, 0.44);
+
+        const tween = gsap.fromTo(
+            cloud,
+            { xPercent: -138, autoAlpha: 0 },
+            {
+                xPercent: 148,
+                duration,
+                delay,
+                repeat: -1,
+                ease: 'none',
+                keyframes: [
+                    { autoAlpha: 0, at: 0 },
+                    { autoAlpha: peakAlpha, at: 0.2 },
+                    { autoAlpha: peakAlpha, at: 0.78 },
+                    { autoAlpha: 0, at: 1 },
+                ],
+            }
+        );
+
+        const driftTween = gsap.to(cloud, {
+            yPercent: `+=${random(-14, 14)}`,
+            duration: random(9, 16),
+            repeat: -1,
+            yoyo: true,
+            ease: 'sine.inOut',
+        });
+
+        backgroundClouds.push({ tween, fadeTween: driftTween });
+    };
+
+    const createRevealCloud = () => {
+        const cloud = document.createElement('img');
+        cloud.className = 'cloud cloud--reveal';
+        cloud.src = pickTexture();
+        cloud.alt = '';
+        cloud.decoding = 'async';
+        revealLayer.append(cloud);
+
+        gsap.set(cloud, {
+            left: `${random(10, 90)}%`,
+            top: `${random(10, 88)}%`,
+            scale: random(0.65, 1.4),
+            rotate: random(-18, 18),
+            autoAlpha: random(0.42, 0.88),
+            xPercent: random(-25, 25),
+            yPercent: random(-25, 25),
+        });
+
+        gsap.to(cloud, {
+            xPercent: `+=${random(-42, 42)}`,
+            yPercent: `+=${random(-16, 16)}`,
+            duration: random(8, 16),
+            repeat: -1,
+            yoyo: true,
+            ease: 'sine.inOut',
+        });
+    };
+
+    for (let i = 0; i < 26; i += 1) {
+        createDepthCloud();
+    }
+
+    for (let i = 0; i < 20; i += 1) {
+        createBackgroundCloud();
+    }
+
+    for (let i = 0; i < 16; i += 1) {
+        createRevealCloud();
+    }
+
+    const timeline = gsap.timeline({ defaults: { ease: 'power3.out' } });
+
+    timeline
+        .fromTo(
+            titleLines,
+            { yPercent: 120, autoAlpha: 0, filter: 'blur(14px)' },
+            { yPercent: 0, autoAlpha: 1, filter: 'blur(0px)', duration: 1.2, stagger: 0.16 },
+            0.35
+        )
+        .fromTo(
+            revealLayer,
+            { autoAlpha: 0.98 },
+            { autoAlpha: 0.2, duration: 2.6, ease: 'sine.out' },
+            0.15
+        )
+        .fromTo(
+            hero.querySelector('.hero__kicker'),
+            { autoAlpha: 0, y: 28 },
+            { autoAlpha: 1, y: 0, duration: 0.9 },
+            0
+        );
+
+    let previousTime = performance.now();
+    let animationFrame = 0;
+
+    const updateDepthClouds = (now) => {
+        const elapsed = Math.min((now - previousTime) / 1000, 0.06);
+        previousTime = now;
+
+        if (!prefersReducedMotion) {
+            for (let i = 0; i < depthClouds.length; i += 1) {
+                const item = depthClouds[i];
+                item.z += item.vz * elapsed;
+                item.x += item.vx * elapsed;
+                item.x += Math.sin(now * 0.00045 * item.drift + item.driftOffset) * 0.55;
+                item.rotation += 0.08 * elapsed;
+
+                if (item.z > 240) {
+                    item.z = random(-1900, -1450);
+                    item.x = random(-460, 460);
+                    item.y = random(-260, 240);
+                    item.vx = random(-38, 38);
+                    item.vz = random(120, 240);
+                    item.rotation = random(-10, 10);
+                    item.el.src = pickTexture();
+                }
+
+                if (item.x > 550 || item.x < -550) {
+                    item.vx *= -1;
+                }
+
+                const fadeIn = smoothStep(-1850, -1080, item.z);
+                const fadeOut = 1 - smoothStep(10, 230, item.z);
+                const depthRatio = Math.max(0, Math.min(1, (item.z + 1900) / 2140));
+                const dynamicCeiling = 0.5 + depthRatio * 0.34;
+                const opacity = Math.max(0, Math.min(dynamicCeiling, fadeIn * fadeOut * dynamicCeiling));
+                item.el.style.opacity = `${opacity}`;
+                item.el.style.transform = `translate3d(${item.x}px, ${item.y}px, ${item.z}px) rotate(${item.rotation}deg)`;
+            }
+        }
+
+        animationFrame = requestAnimationFrame(updateDepthClouds);
+    };
+
+    animationFrame = requestAnimationFrame(updateDepthClouds);
+
+    const onVisibility = () => {
+        if (document.hidden) {
+            cancelAnimationFrame(animationFrame);
+            return;
+        }
+
+        previousTime = performance.now();
+        animationFrame = requestAnimationFrame(updateDepthClouds);
+    };
+
+    document.addEventListener('visibilitychange', onVisibility);
+
+    window.addEventListener(
+        'beforeunload',
+        () => {
+            document.removeEventListener('visibilitychange', onVisibility);
+            cancelAnimationFrame(animationFrame);
+            backgroundClouds.forEach(({ tween, fadeTween }) => {
+                tween.kill();
+                fadeTween.kill();
+            });
+            timeline.kill();
+        },
+        { once: true }
+    );
 </script>
+
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;600&display=swap');
+
+    .hero {
+        --hero-bg-fallback: #76b9ef;
+        --hero-text: #eaf6ff;
+        --hero-accent: #7bd2ff;
+        position: relative;
+        isolation: isolate;
+        width: 100%;
+        min-height: 100svh;
+        overflow: hidden;
+        display: grid;
+        place-items: center;
+        background-color: var(--hero-bg-fallback);
+        background-image:
+            linear-gradient(180deg, rgba(190, 227, 252, 0.18) 0%, rgba(127, 188, 236, 0.24) 100%),
+            url('bg_hero.webp');
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        perspective: 1450px;
+    }
+
+    .hero__sky-gradient,
+    .hero__mist {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+    }
+
+    .hero__sky-gradient {
+        background:
+            radial-gradient(circle at 52% 38%, rgba(218, 241, 255, 0.45) 0%, rgba(218, 241, 255, 0) 58%),
+            linear-gradient(180deg, rgba(232, 247, 255, 0.2) 0%, rgba(177, 220, 249, 0) 62%);
+        z-index: 0;
+    }
+
+    .hero__mist {
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(9, 33, 56, 0.18) 100%);
+        z-index: 1;
+    }
+
+    .hero__depth,
+    .hero__background,
+    .hero__reveal {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        transform-style: preserve-3d;
+    }
+
+    .hero__depth {
+        z-index: 2;
+    }
+
+    .hero__background {
+        z-index: 3;
+        filter: blur(0.7px);
+    }
+
+    .hero__content {
+        position: relative;
+        z-index: 5;
+        text-align: center;
+        padding-inline: 24px;
+        max-width: min(1140px, 100%);
+    }
+
+    .hero__content::before {
+        content: '';
+        position: absolute;
+        inset: -18% -10%;
+        z-index: -1;
+        background: radial-gradient(circle at center, rgba(221, 241, 255, 0.46) 0%, rgba(221, 241, 255, 0.14) 45%, rgba(221, 241, 255, 0) 75%);
+        filter: blur(10px);
+        pointer-events: none;
+    }
+
+    .hero__kicker {
+        margin: 0 0 16px;
+        font-family: 'Rajdhani', 'Segoe UI', Tahoma, sans-serif;
+        font-size: clamp(0.92rem, 1.2vw, 1.15rem);
+        letter-spacing: 0.22em;
+        color: #0f3558;
+        text-shadow: 0 1px 0 rgba(235, 248, 255, 0.8);
+        text-transform: uppercase;
+        opacity: 0;
+    }
+
+    .hero__title {
+        margin: 0;
+        display: inline-grid;
+        gap: clamp(8px, 1.4vw, 16px);
+        font-family: 'Orbitron', 'Segoe UI', Tahoma, sans-serif;
+        font-weight: 900;
+        text-transform: uppercase;
+        line-height: 0.95;
+        letter-spacing: 0.06em;
+        font-size: clamp(2rem, 9vw, 6.9rem);
+        color: #08233d;
+        -webkit-text-stroke: 1px rgba(230, 245, 255, 0.66);
+        text-shadow:
+            0 2px 0 rgba(239, 249, 255, 0.86),
+            0 12px 24px rgba(5, 28, 48, 0.34);
+    }
+
+    .hero__title span {
+        opacity: 0;
+        display: block;
+    }
+
+    .hero__reveal {
+        z-index: 6;
+        mix-blend-mode: screen;
+        filter: blur(0.4px) saturate(1.1);
+    }
+
+    .cloud {
+        position: absolute;
+        user-select: none;
+        -webkit-user-drag: none;
+        will-change: transform, opacity;
+    }
+
+    .cloud--depth {
+        left: 50%;
+        top: 50%;
+        transform-origin: center;
+        opacity: 0;
+        mix-blend-mode: screen;
+        filter: brightness(1.04) contrast(0.95);
+    }
+
+    .cloud--background {
+        left: 0;
+        width: clamp(240px, 28vw, 560px);
+        opacity: 0;
+        mix-blend-mode: screen;
+    }
+
+    .cloud--reveal {
+        width: clamp(210px, 25vw, 520px);
+        mix-blend-mode: screen;
+        filter: brightness(1.2) saturate(1.05);
+    }
+
+    @media (max-width: 920px) {
+        .hero {
+            perspective: 1100px;
+        }
+
+        .hero__kicker {
+            letter-spacing: 0.16em;
+            margin-bottom: 12px;
+        }
+
+        .cloud--depth {
+            filter: brightness(1.07) contrast(0.9);
+        }
+    }
+
+    @media (max-width: 600px) {
+        .hero__content {
+            padding-inline: 14px;
+        }
+
+        .hero__title {
+            letter-spacing: 0.04em;
+            line-height: 1;
+        }
+
+        .cloud--background {
+            width: clamp(170px, 56vw, 360px);
+        }
+
+        .cloud--reveal {
+            width: clamp(190px, 50vw, 350px);
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .cloud,
+        .hero__kicker,
+        .hero__title span,
+        .hero__reveal {
+            animation: none !important;
+            transition: none !important;
+        }
+
+        .hero__kicker,
+        .hero__title span {
+            opacity: 1;
+        }
+
+        .hero__reveal {
+            opacity: 0.18;
+        }
+    }
+</style>
