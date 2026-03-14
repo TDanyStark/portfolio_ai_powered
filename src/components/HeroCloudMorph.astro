@@ -12,6 +12,7 @@
         </h1>
 
         <div class="hero__tech-stage" data-tech-stage aria-hidden="true">
+            <div class="hero__tech-word" data-tech-word></div>
             <div class="hero__tech-fallback" data-tech-fallback hidden>
                 <span style="--tech-color: #61dafb;">REACT</span>
                 <span style="--tech-color: #3776ab;">PYTHON</span>
@@ -41,12 +42,13 @@
     const backgroundLayer = hero.querySelector('[data-background-layer]');
     const revealLayer = hero.querySelector('[data-reveal-layer]');
     const techStage = hero.querySelector('[data-tech-stage]');
+    const techWordLayer = hero.querySelector('[data-tech-word]');
     const techFallback = hero.querySelector('[data-tech-fallback]');
     const title = hero.querySelector('.hero__title');
     const titleLines = hero.querySelectorAll('[data-title-line]');
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    if (!depthLayer || !backgroundLayer || !revealLayer || !techStage || !techFallback || !title) {
+    if (!depthLayer || !backgroundLayer || !revealLayer || !techStage || !techWordLayer || !techFallback || !title) {
         throw new Error('Cloud layers are missing in hero markup.');
     }
 
@@ -60,17 +62,17 @@
         { label: 'HTML', color: '#e34f26' },
         { label: 'MYSQL', color: '#00758f' },
     ];
-    const techParticleCount = window.innerWidth <= 720 ? 132 : 184;
+    const techParticleCount = window.innerWidth <= 720 ? 240 : 380;
 
     const depthClouds = [];
     const backgroundClouds = [];
+    const techDots = [];
     const techParticles = [];
     const wordPointCache = new Map();
+    const techCycleCalls = [];
 
     let activeWordIndex = 0;
     let activeSequenceMode = 'assemble';
-    let isTransitioningWord = false;
-    let stageHoverArmed = true;
     let stageWidth = 0;
     let stageHeight = 0;
     let resizeTimer = 0;
@@ -146,7 +148,7 @@
         sampleContext.strokeText(word, stageWidth / 2, stageHeight / 2);
 
         const imageData = sampleContext.getImageData(0, 0, sampleCanvas.width, sampleCanvas.height).data;
-        const sampleStep = stageWidth <= 560 ? 8 : 7;
+        const sampleStep = stageWidth <= 560 ? 4 : 3;
         const points = [];
 
         for (let y = 0; y < stageHeight; y += sampleStep) {
@@ -164,14 +166,17 @@
             }
         }
 
-        const stride = Math.max(1, Math.ceil(points.length / Math.max(1, techParticleCount - 12)));
-        const reduced = [];
+        const stride = Math.max(1, Math.ceil(points.length / Math.max(1, techParticleCount)));
+        const output = [];
 
         for (let index = 0; index < points.length; index += stride) {
-            reduced.push(points[index]);
+            output.push(points[index]);
+
+            if (output.length >= techParticleCount) {
+                break;
+            }
         }
 
-        const output = shuffle(reduced).slice(0, techParticleCount);
         wordPointCache.set(cacheKey, output);
         return output;
     };
@@ -179,7 +184,6 @@
     const createTechParticle = () => {
         const particle = document.createElement('span');
         particle.className = 'tech-cloud-particle';
-        particle.style.setProperty('--cloud-mask', `url("${pickTexture()}")`);
         techStage.append(particle);
 
         const state = {
@@ -244,17 +248,17 @@
             particle.el.style.setProperty('--particle-color', word.color);
 
             if (point) {
-                particle.tx = point.x + random(-3.2, 3.2);
-                particle.ty = point.y + random(-2.8, 2.8);
+                particle.tx = point.x + random(-0.3, 0.3);
+                particle.ty = point.y + random(-0.3, 0.3);
                 particle.tz = random(-18, 34);
-                particle.toOpacity = random(0.62, 1);
-                particle.toScale = random(0.76, 1.42);
-                particle.targetRotation = random(-16, 16);
+                particle.toOpacity = random(0.9, 1);
+                particle.toScale = random(0.78, 1.18);
+                particle.targetRotation = random(-8, 8);
             } else {
-                particle.tx = random(-stageWidth * 0.72, stageWidth * 0.72);
-                particle.ty = random(-stageHeight * 0.52, stageHeight * 0.52);
+                particle.tx = random(-stageWidth * 0.68, stageWidth * 0.68);
+                particle.ty = random(-stageHeight * 0.5, stageHeight * 0.5);
                 particle.tz = random(-stageDepth, -stageDepth * 0.45);
-                particle.toOpacity = random(0.02, 0.14);
+                particle.toOpacity = 0;
                 particle.toScale = random(0.3, 0.82);
                 particle.targetRotation = random(-70, 70);
             }
@@ -276,47 +280,108 @@
                     ? stageHeight * 1.3 + random(60, 260)
                     : random(-stageHeight * 0.74, stageHeight * 0.74);
             particle.tz = direction === 'below' ? random(-160, 120) : random(-stageDepth, -stageDepth * 0.44);
-            particle.toOpacity = random(0.01, 0.12);
+            particle.toOpacity = random(0.005, 0.05);
             particle.toScale = random(0.28, 0.92);
             particle.targetRotation = random(-140, 140);
         });
     };
 
-    const showWordFromBelow = (index) => {
-        assignWordTargets(index, { resetFromBelow: true });
+    const clearTechCycle = () => {
+        while (techCycleCalls.length > 0) {
+            techCycleCalls.pop()?.kill();
+        }
+
+        gsap.killTweensOf(techDots);
     };
 
-    const transitionToNextWord = () => {
-        if (isTransitioningWord || prefersReducedMotion) {
-            return;
+    const initTechDots = () => {
+        techWordLayer.innerHTML = '';
+        techDots.length = 0;
+        const fragment = document.createDocumentFragment();
+
+        for (let i = 0; i < techParticleCount; i += 1) {
+            const dot = document.createElement('span');
+            dot.className = 'tech-cloud-dot';
+            dot.style.setProperty('--cloud-tex', `url("${pickTexture()}")`);
+            dot.style.opacity = '0';
+            fragment.append(dot);
+            techDots.push(dot);
         }
 
-        isTransitioningWord = true;
-        stageHoverArmed = false;
-
-        assignScatterTargets(activeWordIndex, 'below');
-
-        window.setTimeout(() => {
-            const nextIndex = (activeWordIndex + 1) % techWords.length;
-            showWordFromBelow(nextIndex);
-
-            window.setTimeout(() => {
-                isTransitioningWord = false;
-            }, 1050);
-        }, 760);
+        techWordLayer.append(fragment);
     };
 
-    const applySequenceLayout = () => {
-        if (prefersReducedMotion || techParticles.length === 0) {
-            return;
-        }
+    const animateTechAssemble = (index, fromBelow = false) => {
+        activeWordIndex = index;
+        activeSequenceMode = 'assemble';
+        const word = techWords[index];
+        const points = getWordPoints(word.label);
 
-        if (activeSequenceMode === 'scatter') {
-            assignScatterTargets(activeWordIndex);
-            return;
-        }
+        for (let i = 0; i < techDots.length; i += 1) {
+            const dot = techDots[i];
+            const point = points[i];
+            dot.style.setProperty('--dot-color', word.color);
 
-        assignWordTargets(activeWordIndex);
+            if (!point) {
+                gsap.to(dot, {
+                    autoAlpha: 0,
+                    duration: 0.6,
+                    ease: 'sine.out',
+                });
+                continue;
+            }
+
+            if (fromBelow) {
+                gsap.set(dot, {
+                    x: random(-stageWidth * 0.34, stageWidth * 0.34),
+                    y: stageHeight * 1.3 + random(40, 180),
+                    scale: random(0.35, 0.8),
+                    autoAlpha: 0,
+                    filter: 'blur(8px)',
+                });
+            }
+
+            gsap.to(dot, {
+                x: point.x,
+                y: point.y,
+                scale: random(0.9, 1.26),
+                autoAlpha: random(0.9, 1),
+                filter: 'blur(0px)',
+                duration: random(0.85, 1.2),
+                delay: i * 0.0016,
+                ease: 'power3.out',
+            });
+        }
+    };
+
+    const animateTechDisassemble = () => {
+        activeSequenceMode = 'scatter';
+
+        gsap.to(techDots, {
+            y: `+=${stageHeight * 1.05}`,
+            autoAlpha: 0,
+            scale: 0.62,
+            filter: 'blur(7px)',
+            duration: 1.05,
+            stagger: { each: 0.0016, from: 'random' },
+            ease: 'power2.inOut',
+        });
+    };
+
+    const scheduleTechCycle = () => {
+        const holdCall = gsap.delayedCall(2, () => {
+            animateTechDisassemble();
+
+            const nextCall = gsap.delayedCall(1.12, () => {
+                const nextIndex = (activeWordIndex + 1) % techWords.length;
+                animateTechAssemble(nextIndex, true);
+                scheduleTechCycle();
+            });
+
+            techCycleCalls.push(nextCall);
+        });
+
+        techCycleCalls.push(holdCall);
     };
 
     updateStageSize();
@@ -380,12 +445,20 @@
                 delay,
                 repeat: -1,
                 ease: 'none',
-                keyframes: [
-                    { autoAlpha: 0, at: 0 },
-                    { autoAlpha: peakAlpha, at: 0.2 },
-                    { autoAlpha: peakAlpha, at: 0.78 },
-                    { autoAlpha: 0, at: 1 },
-                ],
+                onUpdate() {
+                    const progress = this.progress();
+                    let alpha = 0;
+
+                    if (progress > 0.18 && progress < 0.78) {
+                        alpha = peakAlpha;
+                    } else if (progress <= 0.18) {
+                        alpha = peakAlpha * (progress / 0.18);
+                    } else {
+                        alpha = peakAlpha * Math.max(0, 1 - (progress - 0.78) / 0.22);
+                    }
+
+                    cloud.style.opacity = `${alpha}`;
+                },
             }
         );
 
@@ -444,12 +517,9 @@
         techFallback.hidden = false;
     } else {
         techFallback.hidden = true;
-
-        for (let i = 0; i < techParticleCount; i += 1) {
-            createTechParticle();
-        }
-
-        showWordFromBelow(0);
+        initTechDots();
+        animateTechAssemble(0, true);
+        scheduleTechCycle();
     }
 
     const timeline = gsap.timeline({ defaults: { ease: 'power3.out' } });
@@ -500,18 +570,6 @@
     if (!prefersReducedMotion) {
         hero.addEventListener('pointermove', onPointerMove);
         hero.addEventListener('pointerleave', onPointerLeave);
-
-        techStage.addEventListener('pointerenter', () => {
-            if (!stageHoverArmed) {
-                return;
-            }
-
-            transitionToNextWord();
-        });
-
-        techStage.addEventListener('pointerleave', () => {
-            stageHoverArmed = true;
-        });
     }
 
     let previousTime = performance.now();
@@ -555,15 +613,15 @@
             for (let i = 0; i < techParticles.length; i += 1) {
                 const particle = techParticles[i];
                 const depthRatio = Math.max(0, Math.min(1, 1 - Math.abs(particle.tz) / 1400));
-                const driftMultiplier = activeSequenceMode === 'assemble' ? 0.42 : 1;
+                const driftMultiplier = activeSequenceMode === 'assemble' ? 0 : 0.9;
                 const driftX = Math.sin(now * 0.00125 * particle.driftSpeed + particle.phase) * particle.driftX * driftMultiplier;
                 const driftY = Math.cos(now * 0.00105 * particle.driftSpeed + particle.phase) * particle.driftY * driftMultiplier;
 
-                particle.x += (particle.tx - particle.x) * 0.086;
-                particle.y += (particle.ty - particle.y) * (activeSequenceMode === 'assemble' ? 0.1 : 0.055);
+                particle.x += (particle.tx - particle.x) * (activeSequenceMode === 'assemble' ? 0.2 : 0.11);
+                particle.y += (particle.ty - particle.y) * (activeSequenceMode === 'assemble' ? 0.22 : 0.055);
                 particle.z += (particle.tz - particle.z) * 0.072;
-                particle.opacity += (particle.toOpacity - particle.opacity) * (activeSequenceMode === 'assemble' ? 0.1 : 0.04);
-                particle.scale += (particle.toScale - particle.scale) * 0.08;
+                particle.opacity += (particle.toOpacity - particle.opacity) * (activeSequenceMode === 'assemble' ? 0.24 : 0.04);
+                particle.scale += (particle.toScale - particle.scale) * (activeSequenceMode === 'assemble' ? 0.16 : 0.1);
                 particle.rotation += (particle.targetRotation - particle.rotation) * 0.065;
 
                 const opacity = Math.max(0, Math.min(1, particle.opacity * (0.72 + depthRatio * 0.45)));
@@ -610,7 +668,13 @@
 
         resizeTimer = window.setTimeout(() => {
             updateStageSize();
-            applySequenceLayout();
+
+            if (!prefersReducedMotion) {
+                clearTechCycle();
+                initTechDots();
+                animateTechAssemble(activeWordIndex, true);
+                scheduleTechCycle();
+            }
         }, 80);
     };
 
@@ -627,6 +691,7 @@
             window.removeEventListener('resize', onResize);
             window.clearTimeout(resizeTimer);
             cancelAnimationFrame(animationFrame);
+            clearTechCycle();
             backgroundClouds.forEach(({ tween, fadeTween }) => {
                 tween.kill();
                 fadeTween.kill();
@@ -700,7 +765,7 @@
 
     .hero__content {
         position: relative;
-        z-index: 5;
+        z-index: 7;
         text-align: center;
         padding-inline: 24px;
         max-width: min(1140px, 100%);
@@ -770,9 +835,9 @@
         width: min(920px, 100%);
         height: clamp(120px, 16vw, 198px);
         transform-style: preserve-3d;
-        pointer-events: auto;
+        pointer-events: none;
         isolation: isolate;
-        cursor: pointer;
+        z-index: 2;
     }
 
     .hero__tech-stage::before {
@@ -786,7 +851,7 @@
     }
 
     .hero__tech-stage::after {
-        content: 'HOVER TO SWITCH STACK';
+        content: 'STACK CLOUD SEQUENCE';
         position: absolute;
         left: 50%;
         bottom: -1.6rem;
@@ -800,6 +865,41 @@
         opacity: 0.72;
     }
 
+    .hero__tech-word {
+        position: absolute;
+        inset: 0;
+        transform-style: preserve-3d;
+        pointer-events: none;
+        overflow: visible;
+        z-index: 3;
+    }
+
+    .tech-cloud-dot {
+        --dot-color: #61dafb;
+        --cloud-tex: url('/cloud1.png');
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: clamp(14px, 2.2vw, 24px);
+        aspect-ratio: 1;
+        border-radius: 999px;
+        background-image:
+            var(--cloud-tex),
+            radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--dot-color) 88%, white 12%) 0%, color-mix(in srgb, var(--dot-color) 60%, white 40%) 62%, transparent 100%);
+        background-size: cover, 100% 100%;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-blend-mode: normal;
+        box-shadow:
+            0 0 10px color-mix(in srgb, var(--dot-color) 58%, transparent 42%),
+            0 0 22px color-mix(in srgb, var(--dot-color) 36%, transparent 64%);
+        mix-blend-mode: normal;
+        opacity: 0;
+        filter: saturate(1.24) contrast(1.08);
+        will-change: transform, opacity, filter;
+        transform-origin: center;
+    }
+
     .hero__tech-fallback {
         position: absolute;
         inset: 0;
@@ -808,6 +908,10 @@
         justify-content: center;
         align-content: center;
         gap: 10px 12px;
+    }
+
+    .hero__tech-fallback[hidden] {
+        display: none !important;
     }
 
     .hero__tech-fallback span {
@@ -863,30 +967,22 @@
         position: absolute;
         left: 50%;
         top: 50%;
-        width: clamp(20px, 3vw, 34px);
-        aspect-ratio: 1.65;
+        width: clamp(14px, 2.2vw, 24px);
+        aspect-ratio: 1;
         border-radius: 999px;
         background:
-            radial-gradient(circle at 35% 38%, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.84) 22%, transparent 48%),
-            radial-gradient(circle at 65% 48%, color-mix(in srgb, var(--particle-color) 82%, white 18%) 0%, color-mix(in srgb, var(--particle-color) 54%, white 46%) 32%, rgba(255, 255, 255, 0) 72%),
-            color-mix(in srgb, var(--particle-color) 74%, white 26%);
+            radial-gradient(circle at 32% 36%, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.2) 42%, transparent 64%),
+            radial-gradient(circle at 62% 58%, color-mix(in srgb, var(--particle-color) 84%, white 16%) 0%, color-mix(in srgb, var(--particle-color) 48%, white 52%) 40%, transparent 74%),
+            radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--particle-color) 72%, white 28%) 0%, color-mix(in srgb, var(--particle-color) 40%, white 60%) 68%, transparent 100%);
         box-shadow:
-            0 0 18px color-mix(in srgb, var(--particle-color) 44%, transparent 56%),
-            0 0 36px color-mix(in srgb, var(--particle-color) 28%, transparent 72%);
-        mix-blend-mode: screen;
+            0 0 14px color-mix(in srgb, var(--particle-color) 55%, transparent 45%),
+            0 0 28px color-mix(in srgb, var(--particle-color) 32%, transparent 68%);
+        mix-blend-mode: plus-lighter;
         opacity: 0;
         transform: translate3d(0, 0, -900px) scale(0.4);
         will-change: transform, opacity;
-        -webkit-mask-image: var(--cloud-mask);
-        -webkit-mask-position: center;
-        -webkit-mask-repeat: no-repeat;
-        -webkit-mask-size: contain;
-        mask-image: var(--cloud-mask);
-        mask-position: center;
-        mask-repeat: no-repeat;
-        mask-size: contain;
         transition: background 0.45s ease, box-shadow 0.45s ease;
-        filter: blur(0.45px) saturate(1.08);
+        filter: blur(0.2px) saturate(1.15);
     }
 
     @media (max-width: 920px) {
@@ -936,13 +1032,17 @@
             height: clamp(104px, 22vw, 150px);
         }
 
+        .tech-cloud-dot {
+            width: clamp(12px, 3.2vw, 18px);
+        }
+
         .hero__tech-stage::after {
             content: 'HOVER';
             bottom: -1.1rem;
         }
 
         .tech-cloud-particle {
-            width: clamp(18px, 5vw, 28px);
+            width: clamp(12px, 4vw, 20px);
         }
     }
 
